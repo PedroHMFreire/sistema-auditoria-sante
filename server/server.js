@@ -160,4 +160,197 @@ app.post('/count', (req, res) => {
       message: `Produto ${code} contado: ${countedItems[code]}`,
       productName: product.Produto
     });
+  } catch (error) {console.error('Erro ao contar produto:', error);
+    res.status(500).json({ error: 'Erro interno do servidor: ' + error.message });
+  }
+});
+
+// Rota para gerar relatório
+app.get('/report', (req, res) => {
+  try {
+    if (inventory.length === 0) {
+      return res.status(200).json([]);
+    }
+    
+    const report = inventory.map(item => ({
+      Código: item.Código,
+      Produto: item.Produto,
+      Saldo_Estoque: item.Saldo_Estoque,
+      Contado: countedItems[item.Código] || 0,
+      Diferença: (countedItems[item.Código] || 0) - item.Saldo_Estoque
+    }));
+    
+    res.status(200).json(report);
   } catch (error) {
+    console.error('Erro ao gerar relatório:', error);
+    res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
+  }
+});
+
+// Rota para exportar relatório para Excel
+app.get('/export', (req, res) => {
+  try {
+    if (inventory.length === 0) {
+      return res.status(400).json({ error: 'Não há dados para exportar' });
+    }
+    
+    // Gerar relatório
+    const report = inventory.map(item => ({
+      Código: item.Código,
+      Produto: item.Produto,
+      Saldo_Estoque: item.Saldo_Estoque,
+      Contado: countedItems[item.Código] || 0,
+      Diferença: (countedItems[item.Código] || 0) - item.Saldo_Estoque
+    }));
+    
+    // Criar planilha
+    const worksheet = xlsx.utils.json_to_sheet(report);
+    
+    // Ajustar largura das colunas
+    const columnWidths = [
+      { wpx: 100 }, // Código
+      { wpx: 250 }, // Produto
+      { wpx: 100 }, // Saldo_Estoque
+      { wpx: 100 }, // Contado
+      { wpx: 100 }  // Diferença
+    ];
+    worksheet['!cols'] = columnWidths;
+    
+    // Estilizar células com diferenças
+    for (let i = 0; i < report.length; i++) {
+      const rowIndex = i + 2; // Ajuste para cabeçalho
+      const cellRef = xlsx.utils.encode_cell({r: rowIndex - 1, c: 4}); // Coluna de Diferença
+      
+      if (!worksheet[cellRef]) continue;
+      
+      const difference = report[i].Diferença;
+      
+      // Definir cores para células com diferenças
+      if (difference !== 0) {
+        worksheet[cellRef].s = {
+          fill: {
+            patternType: 'solid',
+            fgColor: { rgb: difference < 0 ? 'FFCCCC' : 'FFFFCC' } // Vermelho para negativo, amarelo para positivo
+          },
+          font: {
+            color: { rgb: difference < 0 ? 'FF0000' : 'FF8C00' }, // Vermelho ou laranja
+            bold: true
+          }
+        };
+      }
+    }
+    
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, 'Relatório de Auditoria');
+    
+    // Definir nome do arquivo
+    const fileName = `relatorio_auditoria_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const filePath = path.join(UPLOAD_DIR, fileName);
+    
+    // Salvar arquivo
+    xlsx.writeFile(workbook, filePath);
+    
+    // Enviar arquivo
+    res.download(filePath, fileName, (err) => {
+      if (err) {
+        console.error('Erro ao enviar arquivo:', err);
+      }
+      
+      // Limpar arquivo após envio
+      fs.unlink(filePath, (unlinkErr) => {
+        if (unlinkErr) console.error('Erro ao excluir arquivo temporário:', unlinkErr);
+      });
+    });
+  } catch (error) {
+    console.error('Erro ao exportar relatório:', error);
+    res.status(500).json({ error: 'Erro ao exportar relatório: ' + error.message });
+  }
+});
+
+// Rota para reiniciar contagem
+app.post('/reset', (req, res) => {
+  try {
+    countedItems = {};
+    saveData();
+    res.status(200).json({ message: 'Contagem reiniciada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao reiniciar contagem:', error);
+    res.status(500).json({ error: 'Erro ao reiniciar contagem: ' + error.message });
+  }
+});
+
+// Rota para ajustar contagem individual
+app.post('/adjust-count', (req, res) => {
+  try {
+    const { code, count } = req.body;
+    
+    if (!code || typeof count !== 'number') {
+      return res.status(400).json({ error: 'Parâmetros inválidos' });
+    }
+    
+    // Verificar se o produto existe
+    const product = inventory.find(item => item.Código === code);
+    if (!product) {
+      return res.status(404).json({ error: 'Produto não encontrado' });
+    }
+    
+    // Atualizar contagem
+    countedItems[code] = count;
+    saveData();
+    
+    res.status(200).json({ 
+      message: `Contagem do produto ${code} ajustada para ${count}`,
+      productName: product.Produto
+    });
+  } catch (error) {
+    console.error('Erro ao ajustar contagem:', error);
+    res.status(500).json({ error: 'Erro ao ajustar contagem: ' + error.message });
+  }
+});
+
+// Rota para verificar status do servidor
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    inventoryCount: inventory.length,
+    countedItemsCount: Object.keys(countedItems).length
+  });
+});
+
+// Servir arquivos estáticos do frontend
+if (process.env.NODE_ENV === 'production') {
+  const staticDir = path.join(__dirname, '../client/build');
+  app.use(express.static(staticDir));
+  
+  // Para qualquer rota não definida, servir o index.html
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(staticDir, 'index.html'));
+  });
+}
+
+// Tratamento global de erros
+app.use((err, req, res, next) => {
+  console.error('Erro não tratado:', err);
+  res.status(500).json({ 
+    error: 'Erro interno do servidor',
+    message: process.env.NODE_ENV === 'production' ? 'Ocorreu um erro inesperado' : err.message
+  });
+});
+
+// Iniciar servidor
+app.listen(port, () => {
+  console.log(`Servidor rodando na porta ${port}`);
+});
+
+// Manipular interrupções para salvar dados antes de encerrar
+process.on('SIGINT', () => {
+  console.log('Servidor encerrando, salvando dados...');
+  saveData();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('Servidor encerrando, salvando dados...');
+  saveData();
+  process.exit(0);
+});
