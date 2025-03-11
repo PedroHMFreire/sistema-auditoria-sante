@@ -323,9 +323,17 @@ if (process.env.NODE_ENV === 'production') {
   const staticDir = path.join(__dirname, '../client/build');
   app.use(express.static(staticDir));
   
-  // Para qualquer rota não definida, servir o index.html
+  // Para qualquer rota não definida, servir o index.html com verificação
   app.get('*', (req, res) => {
-    res.sendFile(path.join(staticDir, 'index.html'));
+    const indexPath = path.join(staticDir, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(500).json({ 
+        error: 'Frontend não foi construído corretamente',
+        message: 'A pasta /client/build não foi encontrada. Verifique se o build do frontend foi executado no deploy.'
+      });
+    }
   });
 }
 
