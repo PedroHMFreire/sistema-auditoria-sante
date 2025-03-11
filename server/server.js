@@ -160,7 +160,8 @@ app.post('/count', (req, res) => {
       message: `Produto ${code} contado: ${countedItems[code]}`,
       productName: product.Produto
     });
-  } catch (error) {console.error('Erro ao contar produto:', error);
+  } catch (error) {
+    console.error('Erro ao contar produto:', error);
     res.status(500).json({ error: 'Erro interno do servidor: ' + error.message });
   }
 });
@@ -316,8 +317,6 @@ app.get('/health', (req, res) => {
     countedItemsCount: Object.keys(countedItems).length
   });
 });
-
-}
 
 // Tratamento global de erros
 app.use((err, req, res, next) => {
