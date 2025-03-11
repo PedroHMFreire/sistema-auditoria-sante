@@ -318,6 +318,17 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Servir arquivos estáticos do frontend em produção
+if (process.env.NODE_ENV === 'production') {
+  const staticDir = path.join(__dirname, '../client/build');
+  app.use(express.static(staticDir));
+  
+  // Para qualquer rota não definida, servir o index.html
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(staticDir, 'index.html'));
+  });
+}
+
 // Tratamento global de erros
 app.use((err, req, res, next) => {
   console.error('Erro não tratado:', err);
