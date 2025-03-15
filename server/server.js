@@ -27,7 +27,7 @@ const DATA_FILE = path.join(DATA_DIR, 'inventory-data.json');
 
 // Estado do aplicativo
 let systemData = []; // Lista de produtos no sistema: [{code: "140066", product: "BONE SANTE PRETO", balance: 50}]
-let storeData = [];  // Lista de códigos contados na loja: ["140066", "97466"]
+let storeData = [];  // Lista de códigos contados na loja: [{code: "140066", quantity: 5}]
 
 // Carregar dados salvos se existirem
 function loadSavedData() {
@@ -203,90 +203,116 @@ app.post('/upload-system-text', upload.single('file'), (req, res) => {
   }
 });
 
-// Rota para adicionar código da loja
+// Rota para adicionar código da loja com quantidade
 app.post('/count-store', (req, res) => {
   try {
-    const { code } = req.body;
+    const { code, quantity } = req.body;
     if (!code || typeof code !== 'string') {
       return res.status(400).json({ error: 'Código inválido' });
     }
+    const qty = parseInt(quantity, 10);
+    if (isNaN(qty) || qty <= 0) {
+      return res.status(400).json({ error: 'Quantidade inválida. Deve ser um número maior que 0.' });
+    }
 
-    storeData.push(code);
+    storeData.push({ code, quantity: qty });
     saveData();
 
-    res.status(200).json({ message: `Código ${code} adicionado à contagem da loja` });
+    res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}` });
   } catch (error) {
     console.error('Erro ao adicionar código da loja:', error);
     res.status(500).json({ error: 'Erro ao adicionar código: ' + error.message });
   }
 });
 
-// Rota para gerar relatório final
-app.get('/report', (req, res) => {
-  try {
-    if (systemData.length === 0) {
-      return res.status(400).json({ error: 'Nenhum dado do sistema fornecido' });
+// Função para gerar relatório (usada por ambas as rotas)
+function generateReport(filterDifferences = false) {
+  if (systemData.length === 0) {
+    throw new Error('Nenhum dado do sistema fornecido');
+  }
+
+  // Contar ocorrências dos códigos na loja
+  const storeCount = {};
+  storeData.forEach(entry => {
+    storeCount[entry.code] = (storeCount[entry.code] || 0) + entry.quantity;
+  });
+
+  let productsInExcess = 0;
+  let productsMissing = 0;
+  let productsRegular = 0;
+
+  // Comparar códigos
+  let reportDetails = systemData.map(item => {
+    const counted = storeCount[item.code] || 0;
+    const expected = item.balance;
+    const difference = counted - expected;
+
+    if (difference === 0) {
+      productsRegular++;
+    } else if (difference > 0) {
+      productsInExcess += difference;
+    } else if (difference < 0) {
+      productsMissing += Math.abs(difference);
     }
 
-    // Contar ocorrências dos códigos na loja
-    const storeCount = {};
-    storeData.forEach(code => {
-      storeCount[code] = (storeCount[code] || 0) + 1;
+    return {
+      Código: item.code,
+      Produto: item.product,
+      Saldo_Estoque: expected,
+      Contado: counted,
+      Diferença: difference,
+    };
+  });
+
+  // Identificar códigos contados na loja que não estão no sistema
+  const systemCodes = new Set(systemData.map(item => item.code));
+  const unknownProducts = Object.keys(storeCount).filter(code => !systemCodes.has(code));
+  unknownProducts.forEach(code => {
+    const counted = storeCount[code];
+    productsInExcess += counted;
+    reportDetails.push({
+      Código: code,
+      Produto: 'Desconhecido (não está no sistema)',
+      Saldo_Estoque: 0,
+      Contado: counted,
+      Diferença: counted,
     });
+  });
 
-    let productsInExcess = 0;
-    let productsMissing = 0;
-    let productsRegular = 0;
+  // Filtrar apenas produtos com diferença != 0 para o relatório sintético
+  if (filterDifferences) {
+    reportDetails = reportDetails.filter(item => item.Diferença !== 0);
+  }
 
-    // Comparar códigos
-    const reportDetails = systemData.map(item => {
-      const counted = storeCount[item.code] || 0;
-      const expected = item.balance;
-      const difference = counted - expected;
+  return {
+    summary: {
+      totalProductsInExcess: productsInExcess,
+      totalProductsMissing: productsMissing,
+      totalProductsRegular: productsRegular,
+    },
+    details: reportDetails,
+  };
+}
 
-      if (difference === 0) {
-        productsRegular++;
-      } else if (difference > 0) {
-        productsInExcess += difference;
-      } else if (difference < 0) {
-        productsMissing += Math.abs(difference);
-      }
-
-      return {
-        Código: item.code,
-        Produto: item.product,
-        Saldo_Estoque: expected,
-        Contado: counted,
-        Diferença: difference,
-      };
-    });
-
-    // Identificar códigos contados na loja que não estão no sistema
-    const systemCodes = new Set(systemData.map(item => item.code));
-    const unknownProducts = Object.keys(storeCount).filter(code => !systemCodes.has(code));
-    unknownProducts.forEach(code => {
-      const counted = storeCount[code];
-      productsInExcess += counted;
-      reportDetails.push({
-        Código: code,
-        Produto: 'Desconhecido (não está no sistema)',
-        Saldo_Estoque: 0,
-        Contado: counted,
-        Diferença: counted,
-      });
-    });
-
-    res.status(200).json({
-      summary: {
-        totalProductsInExcess: productsInExcess,
-        totalProductsMissing: productsMissing,
-        totalProductsRegular: productsRegular,
-      },
-      details: reportDetails,
-    });
+// Rota para relatório detalhado (todos os produtos)
+app.get('/report-detailed', (req, res) => {
+  try {
+    const report = generateReport(false);
+    res.status(200).json(report);
   } catch (error) {
-    console.error('Erro ao gerar relatório:', error);
-    res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
+    console.error('Erro ao gerar relatório detalhado:', error);
+    res.status(500).json({ error: 'Erro ao gerar relatório detalhado: ' + error.message });
+  }
+});
+
+// Rota para relatório sintético (apenas produtos com diferença)
+app.get('/report-synthetic', (req, res) => {
+  try {
+    const report = generateReport(true);
+    res.status(200).json(report);
+  } catch (error) {
+    console.error('Erro ao gerar relatório sintético:', error);
+    res.status(500).json({ error: 'Erro ao gerar relatório sintético: ' + error.message });
   }
 });
 
