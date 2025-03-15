@@ -24,10 +24,12 @@ const DATA_DIR = path.join(__dirname, 'data');
 
 // Arquivo para armazenar dados persistentes
 const DATA_FILE = path.join(DATA_DIR, 'inventory-data.json');
+const STATE_FILE = path.join(DATA_DIR, 'count-state.json');
 
 // Estado do aplicativo
-let inventory = [];
-let countedItems = {};
+let inventory = []; // Produtos do arquivo xlsx
+let countedItems = {}; // Produtos contados manualmente
+let countState = { isPaused: false }; // Estado da contagem (pausada ou ativa)
 
 // Carregar dados salvos se existirem
 function loadSavedData() {
@@ -43,6 +45,19 @@ function loadSavedData() {
   }
 }
 
+// Carregar estado da contagem
+function loadCountState() {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+      countState = state;
+      console.log('Estado da contagem carregado:', countState);
+    }
+  } catch (error) {
+    console.error('Erro ao carregar estado da contagem:', error);
+  }
+}
+
 // Salvar dados em arquivo
 function saveData() {
   try {
@@ -54,8 +69,19 @@ function saveData() {
   }
 }
 
+// Salvar estado da contagem
+function saveCountState() {
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(countState, null, 2));
+    console.log('Estado da contagem salvo:', countState);
+  } catch (error) {
+    console.error('Erro ao salvar estado da contagem:', error);
+  }
+}
+
 // Carregar dados iniciais
 loadSavedData();
+loadCountState();
 
 // Configuração de upload
 const storage = multer.diskStorage({
@@ -71,7 +97,6 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage: storage,
   fileFilter: (req, file, cb) => {
-    // Aceitar apenas arquivos Excel
     if (file.mimetype.includes('excel') || 
         file.mimetype.includes('spreadsheetml') ||
         file.originalname.endsWith('.xlsx') || 
@@ -112,23 +137,28 @@ app.post('/upload', upload.single('file'), (req, res) => {
       Saldo_Estoque: parseFloat(item.Saldo_Estoque) || 0
     }));
     
-    // Manter contagens existentes apenas para produtos que ainda existem
-    const existingCodes = new Set(inventory.map(item => item.Código));
-    for (const code in countedItems) {
-      if (!existingCodes.has(code)) {
-        delete countedItems[code];
-      }
-    }
+    // Limpar contagens existentes
+    countedItems = {};
     
     // Salvar dados
     saveData();
     
+    // Gerar relatório inicial
+    const totalUnits = inventory.reduce((sum, item) => sum + item.Saldo_Estoque, 0);
+    const totalItems = inventory.length;
+
     // Limpar arquivo temporário
     fs.unlink(req.file.path, (err) => {
       if (err) console.error('Erro ao excluir arquivo temporário:', err);
     });
     
-    res.status(200).json({ message: 'Planilha carregada com sucesso!' });
+    res.status(200).json({ 
+      message: 'Planilha carregada com sucesso!',
+      initialReport: {
+        totalUnits,
+        totalItems
+      }
+    });
   } catch (error) {
     console.error('Erro no upload da planilha:', error);
     res.status(500).json({ error: 'Erro ao processar planilha: ' + error.message });
@@ -138,27 +168,26 @@ app.post('/upload', upload.single('file'), (req, res) => {
 // Rota para contar produto
 app.post('/count', (req, res) => {
   try {
+    if (countState.isPaused) {
+      return res.status(400).json({ error: 'Contagem está pausada. Retome a contagem antes de continuar.' });
+    }
+
     const { code } = req.body;
     
     if (!code || typeof code !== 'string') {
       return res.status(400).json({ error: 'Código de produto inválido' });
     }
     
-    // Verificar se o produto existe no inventário
-    const product = inventory.find(item => item.Código === code);
-    if (!product) {
-      return res.status(404).json({ error: `Produto com código ${code} não encontrado no estoque` });
-    }
-    
-    // Incrementar contagem
+    // Incrementar contagem (suporte a múltiplos usuários)
     countedItems[code] = (countedItems[code] || 0) + 1;
     
-    // Salvar dados
+    // Salvar dados imediatamente para evitar perdas
     saveData();
     
+    const product = inventory.find(item => item.Código === code);
     res.status(200).json({ 
       message: `Produto ${code} contado: ${countedItems[code]}`,
-      productName: product.Produto
+      productName: product ? product.Produto : 'Produto não encontrado no estoque'
     });
   } catch (error) {
     console.error('Erro ao contar produto:', error);
@@ -166,22 +195,122 @@ app.post('/count', (req, res) => {
   }
 });
 
-// Rota para gerar relatório
+// Rota para salvar contagem manualmente
+app.post('/save-count', (req, res) => {
+  try {
+    if (countState.isPaused) {
+      return res.status(400).json({ error: 'Contagem está pausada. Retome a contagem antes de continuar.' });
+    }
+
+    const { code } = req.body;
+    
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'Código de produto inválido' });
+    }
+
+    // Salvar dados (já está sendo salvo em /count, mas reforçamos aqui)
+    saveData();
+    
+    res.status(200).json({ 
+      message: `Contagem do produto ${code} salva com sucesso: ${countedItems[code] || 0}`
+    });
+  } catch (error) {
+    console.error('Erro ao salvar contagem:', error);
+    res.status(500).json({ error: 'Erro ao salvar contagem: ' + error.message });
+  }
+});
+
+// Rota para pausar a contagem
+app.post('/pause', (req, res) => {
+  try {
+    countState.isPaused = true;
+    saveCountState();
+    saveData();
+    res.status(200).json({ message: 'Contagem pausada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao pausar contagem:', error);
+    res.status(500).json({ error: 'Erro ao pausar contagem: ' + error.message });
+  }
+});
+
+// Rota para retomar a contagem
+app.post('/resume', (req, res) => {
+  try {
+    countState.isPaused = false;
+    saveCountState();
+    res.status(200).json({ message: 'Contagem retomada com sucesso' });
+  } catch (error) {
+    console.error('Erro ao retomar contagem:', error);
+    res.status(500).json({ error: 'Erro ao retomar contagem: ' + error.message });
+  }
+});
+
+// Rota para verificar o estado da contagem
+app.get('/count-state', (req, res) => {
+  try {
+    res.status(200).json({ isPaused: countState.isPaused });
+  } catch (error) {
+    console.error('Erro ao verificar estado da contagem:', error);
+    res.status(500).json({ error: 'Erro ao verificar estado: ' + error.message });
+  }
+});
+
+// Rota para gerar relatório final
 app.get('/report', (req, res) => {
   try {
     if (inventory.length === 0) {
-      return res.status(200).json([]);
+      return res.status(200).json({ message: 'Nenhum dado disponível para gerar relatório' });
     }
     
-    const report = inventory.map(item => ({
-      Código: item.Código,
-      Produto: item.Produto,
-      Saldo_Estoque: item.Saldo_Estoque,
-      Contado: countedItems[item.Código] || 0,
-      Diferença: (countedItems[item.Código] || 0) - item.Saldo_Estoque
-    }));
-    
-    res.status(200).json(report);
+    // Calcular produtos em sobra, em falta e regulares
+    let productsInExcess = 0; // Produtos contados que não estão no sistema
+    let productsMissing = 0;  // Produtos no sistema que não foram contados
+    let productsRegular = 0;  // Produtos que batem (contagem = saldo)
+
+    const reportDetails = inventory.map(item => {
+      const counted = countedItems[item.Código] || 0;
+      const difference = counted - item.Saldo_Estoque;
+
+      if (difference === 0) {
+        productsRegular++;
+      } else if (counted > item.Saldo_Estoque) {
+        productsInExcess += difference;
+      } else if (counted < item.Saldo_Estoque) {
+        productsMissing += Math.abs(difference);
+      }
+
+      return {
+        Código: item.Código,
+        Produto: item.Produto,
+        Saldo_Estoque: item.Saldo_Estoque,
+        Contado: counted,
+        Diferença: difference
+      };
+    });
+
+    // Verificar produtos contados que não estão no sistema
+    const inventoryCodes = new Set(inventory.map(item => item.Código));
+    for (const code in countedItems) {
+      if (!inventoryCodes.has(code)) {
+        productsInExcess += countedItems[code];
+        reportDetails.push({
+          Código: code,
+          Produto: 'Desconhecido (não está no sistema)',
+          Saldo_Estoque: 0,
+          Contado: countedItems[code],
+          Diferença: countedItems[code]
+        });
+      }
+    }
+
+    res.status(200).json({
+      summary: {
+        totalProductsInExcess: productsInExcess,
+        totalProductsMissing: productsMissing,
+        totalProductsRegular: productsRegular
+      },
+      details: reportDetails
+    });
   } catch (error) {
     console.error('Erro ao gerar relatório:', error);
     res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
@@ -204,10 +333,7 @@ app.get('/export', (req, res) => {
       Diferença: (countedItems[item.Código] || 0) - item.Saldo_Estoque
     }));
     
-    // Criar planilha
     const worksheet = xlsx.utils.json_to_sheet(report);
-    
-    // Ajustar largura das colunas
     const columnWidths = [
       { wpx: 100 }, // Código
       { wpx: 250 }, // Produto
@@ -217,24 +343,20 @@ app.get('/export', (req, res) => {
     ];
     worksheet['!cols'] = columnWidths;
     
-    // Estilizar células com diferenças
     for (let i = 0; i < report.length; i++) {
-      const rowIndex = i + 2; // Ajuste para cabeçalho
-      const cellRef = xlsx.utils.encode_cell({r: rowIndex - 1, c: 4}); // Coluna de Diferença
-      
+      const rowIndex = i + 2;
+      const cellRef = xlsx.utils.encode_cell({r: rowIndex - 1, c: 4});
       if (!worksheet[cellRef]) continue;
       
       const difference = report[i].Diferença;
-      
-      // Definir cores para células com diferenças
       if (difference !== 0) {
         worksheet[cellRef].s = {
           fill: {
             patternType: 'solid',
-            fgColor: { rgb: difference < 0 ? 'FFCCCC' : 'FFFFCC' } // Vermelho para negativo, amarelo para positivo
+            fgColor: { rgb: difference < 0 ? 'FFCCCC' : 'FFFFCC' }
           },
           font: {
-            color: { rgb: difference < 0 ? 'FF0000' : 'FF8C00' }, // Vermelho ou laranja
+            color: { rgb: difference < 0 ? 'FF0000' : 'FF8C00' },
             bold: true
           }
         };
@@ -244,20 +366,14 @@ app.get('/export', (req, res) => {
     const workbook = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(workbook, worksheet, 'Relatório de Auditoria');
     
-    // Definir nome do arquivo
     const fileName = `relatorio_auditoria_${new Date().toISOString().split('T')[0]}.xlsx`;
     const filePath = path.join(UPLOAD_DIR, fileName);
-    
-    // Salvar arquivo
     xlsx.writeFile(workbook, filePath);
     
-    // Enviar arquivo
     res.download(filePath, fileName, (err) => {
       if (err) {
         console.error('Erro ao enviar arquivo:', err);
       }
-      
-      // Limpar arquivo após envio
       fs.unlink(filePath, (unlinkErr) => {
         if (unlinkErr) console.error('Erro ao excluir arquivo temporário:', unlinkErr);
       });
@@ -272,7 +388,9 @@ app.get('/export', (req, res) => {
 app.post('/reset', (req, res) => {
   try {
     countedItems = {};
+    countState.isPaused = false;
     saveData();
+    saveCountState();
     res.status(200).json({ message: 'Contagem reiniciada com sucesso' });
   } catch (error) {
     console.error('Erro ao reiniciar contagem:', error);
@@ -283,19 +401,21 @@ app.post('/reset', (req, res) => {
 // Rota para ajustar contagem individual
 app.post('/adjust-count', (req, res) => {
   try {
+    if (countState.isPaused) {
+      return res.status(400).json({ error: 'Contagem está pausada. Retome a contagem antes de continuar.' });
+    }
+
     const { code, count } = req.body;
     
     if (!code || typeof count !== 'number') {
       return res.status(400).json({ error: 'Parâmetros inválidos' });
     }
     
-    // Verificar se o produto existe
     const product = inventory.find(item => item.Código === code);
     if (!product) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
     
-    // Atualizar contagem
     countedItems[code] = count;
     saveData();
     
@@ -323,7 +443,6 @@ if (process.env.NODE_ENV === 'production') {
   const staticDir = path.join(__dirname, '../client/build');
   app.use(express.static(staticDir));
   
-  // Para qualquer rota não definida, servir o index.html com verificação
   app.get('*', (req, res) => {
     const indexPath = path.join(staticDir, 'index.html');
     if (fs.existsSync(indexPath)) {
@@ -355,11 +474,13 @@ app.listen(port, () => {
 process.on('SIGINT', () => {
   console.log('Servidor encerrando, salvando dados...');
   saveData();
+  saveCountState();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   console.log('Servidor encerrando, salvando dados...');
   saveData();
+  saveCountState();
   process.exit(0);
 });
