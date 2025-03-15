@@ -5,137 +5,124 @@
 }
 
 body {
-  background-color: #f4f7fa;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  color: #333;
+  background-color: #f5f5f5;
+  font-family: 'Roboto', sans-serif;
+  color: #202124;
 }
 
 .App {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
+  max-width: 800px;
+  margin: 40px auto;
 }
 
 .App-header {
-  background-color: #2c3e50;
-  color: white;
+  background-color: white;
   padding: 20px;
-  border-radius: 10px 10px 0 0;
   text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-radius: 8px 8px 0 0;
 }
 
 .App-header h1 {
-  font-size: 2.5em;
-  letter-spacing: 2px;
+  font-size: 2em;
+  color: #1a73e8;
 }
 
 .App-main {
   background-color: white;
-  padding: 30px;
-  border-radius: 0 0 10px 10px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  margin-top: -10px;
+  padding: 20px;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.section {
-  margin-bottom: 30px;
+.card {
+  margin-bottom: 20px;
+  padding: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #fafafa;
 }
 
-.section h2 {
-  color: #2c3e50;
-  font-size: 1.8em;
+.card h2 {
+  font-size: 1.5em;
+  color: #202124;
   margin-bottom: 15px;
-  border-bottom: 2px solid #3498db;
-  display: inline-block;
 }
 
-.file-input {
-  display: block;
-  margin: 10px 0;
+.field {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.file-input,
+.text-input {
   padding: 10px;
-  border: 2px solid #ddd;
-  border-radius: 5px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
   font-size: 1em;
   width: 100%;
   max-width: 300px;
+  transition: border-color 0.3s;
 }
 
-.input {
-  padding: 10px;
-  border: 2px solid #ddd;
-  border-radius: 5px;
-  font-size: 1em;
-  width: 100%;
-  max-width: 300px;
-  margin: 10px 0;
-}
-
-.message {
-  color: #27ae60;
-  margin-top: 10px;
-  font-size: 1.1em;
+.file-input:focus,
+.text-input:focus {
+  border-color: #1a73e8;
+  outline: none;
 }
 
 .btn {
-  padding: 12px 25px;
-  margin: 5px;
+  padding: 10px 20px;
   border: none;
-  border-radius: 5px;
+  border-radius: 4px;
   font-size: 1em;
   cursor: pointer;
-  transition: background-color 0.3s, transform 0.2s;
+  transition: background-color 0.3s, box-shadow 0.3s;
 }
 
 .btn.primary {
-  background-color: #3498db;
+  background-color: #1a73e8;
   color: white;
 }
 
 .btn.primary:hover {
-  background-color: #2980b9;
-  transform: translateY(-2px);
+  background-color: #1557b0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .btn.secondary {
-  background-color: #e74c3c;
+  background-color: #34a853;
   color: white;
 }
 
 .btn.secondary:hover {
-  background-color: #c0392b;
-  transform: translateY(-2px);
-}
-
-.btn.danger {
-  background-color: #e74c3c;
-  color: white;
-}
-
-.btn.danger:hover {
-  background-color: #c0392b;
-  transform: translateY(-2px);
+  background-color: #2d8e46;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .btn:disabled {
-  background-color: #bdc3c7;
+  background-color: #dadce0;
   cursor: not-allowed;
 }
 
-.controls {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
+.message {
+  color: #34a853;
+  margin-top: 10px;
+  font-size: 1em;
 }
 
-.report {
+.report-initial,
+.report-final {
   margin-top: 20px;
-  padding: 20px;
-  background-color: #ecf0f1;
-  border-radius: 5px;
 }
 
-.report h3 {
-  color: #2c3e50;
+.report-initial h3,
+.report-final h3,
+.report-final h4 {
+  font-size: 1.2em;
+  color: #202124;
   margin-bottom: 10px;
 }
 
@@ -147,43 +134,45 @@ body {
 
 .report-table th,
 .report-table td {
-  border: 1px solid #ddd;
-  padding: 12px;
+  border: 1px solid #e0e0e0;
+  padding: 10px;
   text-align: center;
 }
 
 .report-table th {
-  background-color: #3498db;
-  color: white;
+  background-color: #f1f3f4;
+  color: #202124;
+  font-weight: 500;
 }
 
 .report-table tr:nth-child(even) {
   background-color: #f9f9f9;
 }
 
-.report-table tr:hover {
-  background-color: #e0f7fa;
-}
-
-@media (max-width: 768px) {
+@media (max-width: 600px) {
   .App {
-    padding: 10px;
+    margin: 20px;
   }
 
   .App-header h1 {
-    font-size: 2em;
-  }
-
-  .section h2 {
     font-size: 1.5em;
   }
 
-  .btn {
-    padding: 10px 20px;
-    font-size: 0.9em;
+  .card h2 {
+    font-size: 1.2em;
   }
 
-  .report-table {
-    font-size: 0.9em;
+  .field {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .file-input,
+  .text-input {
+    max-width: 100%;
+  }
+
+  .btn {
+    width: 100%;
   }
 }
