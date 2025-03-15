@@ -34,9 +34,9 @@ let countState = { isPaused: false };
 // Função para normalizar nomes de colunas
 function normalizeColumnName(name) {
   return name
-    .toLowerCase() // Converter para minúsculas
-    .replace(/\s+/g, '_') // Substituir espaços por sublinhados
-    .replace(/[^a-z0-9_]/g, ''); // Remover caracteres especiais
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '');
 }
 
 // Carregar dados salvos se existirem
@@ -130,16 +130,13 @@ app.post('/upload', upload.single('file'), (req, res) => {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
 
-    // Verificar se há dados
     if (rawData.length === 0) {
       return res.status(400).json({ error: 'Planilha vazia' });
     }
 
-    // Obter e normalizar os cabeçalhos
     const headers = rawData[0].map(header => normalizeColumnName(header));
     const expectedColumns = ['codigo', 'produto', 'saldo_estoque'];
 
-    // Verificar se todas as colunas esperadas estão presentes
     const missingColumns = expectedColumns.filter(col => !headers.includes(col));
     if (missingColumns.length > 0) {
       return res.status(400).json({ 
@@ -147,14 +144,12 @@ app.post('/upload', upload.single('file'), (req, res) => {
       });
     }
 
-    // Mapear os dados com os cabeçalhos normalizados
     const columnMap = {
       codigo: headers.indexOf('codigo'),
       produto: headers.indexOf('produto'),
       saldo_estoque: headers.indexOf('saldo_estoque')
     };
 
-    // Converter os dados em objetos com chaves normalizadas
     inventory = rawData.slice(1).map(row => {
       const normalizedRow = {
         Código: row[columnMap.codigo] ? row[columnMap.codigo].toString() : '',
@@ -162,27 +157,22 @@ app.post('/upload', upload.single('file'), (req, res) => {
         Saldo_Estoque: parseFloat(row[columnMap.saldo_estoque]) || 0
       };
       return normalizedRow;
-    }).filter(row => row.Código && row.Produto); // Filtrar linhas inválidas
+    }).filter(row => row.Código && row.Produto);
 
     if (inventory.length === 0) {
       return res.status(400).json({ error: 'Nenhuma linha válida encontrada na planilha' });
     }
 
-    // Limpar contagens existentes
     countedItems = {};
-    
-    // Salvar dados
     saveData();
-    
-    // Gerar relatório inicial
+
     const totalUnits = inventory.reduce((sum, item) => sum + item.Saldo_Estoque, 0);
     const totalItems = inventory.length;
 
-    // Limpar arquivo temporário
     fs.unlink(req.file.path, (err) => {
       if (err) console.error('Erro ao excluir arquivo temporário:', err);
     });
-    
+
     res.status(200).json({ 
       message: 'Planilha carregada com sucesso!',
       initialReport: {
@@ -209,10 +199,7 @@ app.post('/count', (req, res) => {
       return res.status(400).json({ error: 'Código de produto inválido' });
     }
     
-    // Incrementar contagem
     countedItems[code] = (countedItems[code] || 0) + 1;
-    
-    // Salvar dados imediatamente para evitar perdas
     saveData();
     
     const product = inventory.find(item => item.Código === code);
@@ -372,7 +359,7 @@ app.get('/export', (req, res) => {
     
     for (let i = 0; i < report.length; i++) {
       const rowIndex = i + 2;
-      const cell MaliRef = xlsx.utils.encode_cell({r: rowIndex - 1, c: 4});
+      const cellRef = xlsx.utils.encode_cell({r: rowIndex - 1, c: 4});
       if (!worksheet[cellRef]) continue;
       
       const difference = report[i].Diferença;
