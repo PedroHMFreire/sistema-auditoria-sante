@@ -46,7 +46,13 @@ body {
 .card h2 {
   font-size: 1.5em;
   color: #202124;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
+}
+
+.card p {
+  font-size: 1em;
+  color: #5f6368;
+  margin-bottom: 10px;
 }
 
 .field {
@@ -100,11 +106,6 @@ body {
 .btn.secondary:hover {
   background-color: #2d8e46;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.btn:disabled {
-  background-color: #dadce0;
-  cursor: not-allowed;
 }
 
 .message {
