@@ -69,7 +69,7 @@ body {
   border-radius: 4px;
   font-size: 1em;
   width: 100%;
-  max-width: 300px;
+  max-width: 150px; /* Ajustado para campos menores */
   transition: border-color 0.3s;
 }
 
@@ -115,13 +115,15 @@ body {
 }
 
 .report-initial,
-.report-final {
+.report-final,
+.report-options {
   margin-top: 20px;
 }
 
 .report-initial h3,
 .report-final h3,
-.report-final h4 {
+.report-final h4,
+.report-options h3 {
   font-size: 1.2em;
   color: #202124;
   margin-bottom: 10px;
