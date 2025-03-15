@@ -6,7 +6,6 @@ const xlsx = require('xlsx');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const PDFDocument = require('pdfkit');
 
 // Configurar CORS
 app.use(cors());
@@ -330,128 +329,6 @@ app.get('/report', (req, res) => {
   } catch (error) {
     console.error('Erro ao gerar relatório:', error);
     res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
-  }
-});
-
-// Rota para exportar relatório para PDF
-app.get('/export', (req, res) => {
-  try {
-    if (inventory.length === 0) {
-      return res.status(400).json({ error: 'Não há dados para exportar' });
-    }
-
-    // Gerar relatório
-    let productsInExcess = 0;
-    let productsMissing = 0;
-    let productsRegular = 0;
-
-    const reportDetails = inventory.map(item => {
-      const counted = countedItems[item.Código] || 0;
-      const difference = counted - item.Saldo_Estoque;
-
-      if (difference === 0) {
-        productsRegular++;
-      } else if (counted > item.Saldo_Estoque) {
-        productsInExcess += difference;
-      } else if (counted < item.Saldo_Estoque) {
-        productsMissing += Math.abs(difference);
-      }
-
-      return {
-        Código: item.Código,
-        Produto: item.Produto,
-        Saldo_Estoque: item.Saldo_Estoque,
-        Contado: counted,
-        Diferença: difference
-      };
-    });
-
-    const inventoryCodes = new Set(inventory.map(item => item.Código));
-    for (const code in countedItems) {
-      if (!inventoryCodes.has(code)) {
-        productsInExcess += countedItems[code];
-        reportDetails.push({
-          Código: code,
-          Produto: 'Desconhecido (não está no sistema)',
-          Saldo_Estoque: 0,
-          Contado: countedItems[code],
-          Diferença: countedItems[code]
-        });
-      }
-    }
-
-    // Criar documento PDF
-    const doc = new PDFDocument();
-    const fileName = `relatorio_auditoria_${new Date().toISOString().split('T')[0]}.pdf`;
-    const filePath = path.join(UPLOAD_DIR, fileName);
-
-    doc.pipe(fs.createWriteStream(filePath));
-
-    // Título
-    doc.fontSize(20).text('Relatório de Auditoria Sante', { align: 'center' });
-    doc.moveDown();
-
-    // Resumo
-    doc.fontSize(14).text('Resumo', { underline: true });
-    doc.moveDown(0.5);
-    doc.fontSize(12)
-      .text(`Total de Produtos em Sobra: ${productsInExcess}`)
-      .text(`Total de Produtos Faltantes: ${productsMissing}`)
-      .text(`Total de Produtos Regulares: ${productsRegular}`);
-    doc.moveDown();
-
-    // Detalhes
-    doc.fontSize(14).text('Detalhes', { underline: true });
-    doc.moveDown(0.5);
-
-    // Tabela (simplificada para PDF)
-    const tableTop = doc.y;
-    const colWidths = [100, 150, 80, 80, 80];
-    const rowHeight = 20;
-
-    // Cabeçalho da tabela
-    doc.fontSize(10).font('Helvetica-Bold');
-    doc.text('Código', 50, tableTop, { width: colWidths[0], align: 'center' });
-    doc.text('Produto', 150, tableTop, { width: colWidths[1], align: 'center' });
-    doc.text('Saldo Estoque', 300, tableTop, { width: colWidths[2], align: 'center' });
-    doc.text('Contado', 380, tableTop, { width: colWidths[3], align: 'center' });
-    doc.text('Diferença', 460, tableTop, { width: colWidths[4], align: 'center' });
-
-    // Linha do cabeçalho
-    doc.moveTo(50, tableTop + 15).lineTo(540, tableTop + 15).stroke();
-    doc.font('Helvetica');
-
-    // Dados da tabela
-    reportDetails.forEach((item, index) => {
-      const y = tableTop + (index + 1) * rowHeight;
-      if (y > 700) { // Nova página se necessário
-        doc.addPage();
-        y = tableTop;
-      }
-
-      doc.text(item.Código, 50, y, { width: colWidths[0], align: 'center' });
-      doc.text(item.Produto, 150, y, { width: colWidths[1], align: 'center' });
-      doc.text(item.Saldo_Estoque.toString(), 300, y, { width: colWidths[2], align: 'center' });
-      doc.text(item.Contado.toString(), 380, y, { width: colWidths[3], align: 'center' });
-      doc.text(item.Diferença.toString(), 460, y, { width: colWidths[4], align: 'center' });
-
-      // Linha divisória
-      doc.moveTo(50, y + 15).lineTo(540, y + 15).stroke();
-    });
-
-    doc.end();
-
-    res.download(filePath, fileName, (err) => {
-      if (err) {
-        console.error('Erro ao enviar arquivo:', err);
-      }
-      fs.unlink(filePath, (unlinkErr) => {
-        if (unlinkErr) console.error('Erro ao excluir arquivo temporário:', unlinkErr);
-      });
-    });
-  } catch (error) {
-    console.error('Erro ao exportar relatório:', error);
-    res.status(500).json({ error: 'Erro ao exportar relatório: ' + error.message });
   }
 });
 
