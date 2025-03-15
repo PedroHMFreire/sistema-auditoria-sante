@@ -28,6 +28,21 @@ body {
   color: #1a73e8;
 }
 
+.App-header nav {
+  margin-top: 10px;
+}
+
+.nav-link {
+  color: #1a73e8;
+  text-decoration: none;
+  margin: 0 15px;
+  font-size: 1em;
+}
+
+.nav-link:hover {
+  text-decoration: underline;
+}
+
 .App-main {
   background-color: white;
   padding: 20px;
@@ -152,6 +167,23 @@ body {
   background-color: #f9f9f9;
 }
 
+.counts-list {
+  list-style: none;
+}
+
+.counts-list li {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+}
+
+.counts-list span {
+  flex-grow: 1;
+}
+
 @media (max-width: 600px) {
   .App {
     margin: 20px;
@@ -177,5 +209,14 @@ body {
 
   .btn {
     width: 100%;
+  }
+
+  .counts-list li {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .counts-list button {
+    margin-top: 10px;
   }
 }
