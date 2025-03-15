@@ -31,10 +31,7 @@ function App() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      const res = await fetch('/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.message) {
         setInitialReport(data.initialReport);
@@ -70,26 +67,6 @@ function App() {
     } catch (error) {
       console.error('Erro ao contar produto:', error);
       alert('Erro ao contar produto.');
-    }
-  };
-
-  const handleSaveCount = async () => {
-    if (!code) {
-      alert('Por favor, insira um código para salvar.');
-      return;
-    }
-
-    try {
-      const res = await fetch('/save-count', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
-      });
-      const data = await res.json();
-      alert(data.message);
-    } catch (error) {
-      console.error('Erro ao salvar contagem:', error);
-      alert('Erro ao salvar contagem.');
     }
   };
 
@@ -159,88 +136,111 @@ function App() {
 
   return (
     <div className="App">
-      <h1>Sistema de Auditoria Sante</h1>
+      <header className="App-header">
+        <h1>Sistema de Auditoria Sante</h1>
+      </header>
 
-      {/* Upload do arquivo Excel */}
-      <div>
-        <h2>Upload da Planilha</h2>
-        <input type="file" accept=".xlsx, .xls" onChange={handleFileChange} />
-        <button onClick={handleUpload}>Upload</button>
-      </div>
-
-      {/* Relatório Inicial */}
-      {initialReport && (
-        <div>
-          <h2>Relatório Inicial</h2>
-          <p>Total de Unidades: {initialReport.totalUnits}</p>
-          <p>Total de Itens: {initialReport.totalItems}</p>
-        </div>
-      )}
-
-      {/* Contagem Manual */}
-      {initialReport && (
-        <div>
-          <h2>Contagem de Produtos</h2>
+      <main className="App-main">
+        {/* Upload da Planilha */}
+        <section className="section">
+          <h2>Upload</h2>
           <input
-            type="text"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="Digite o código do produto"
-            disabled={isPaused}
+            type="file"
+            accept=".xlsx, .xls"
+            onChange={handleFileChange}
+            className="file-input"
           />
-          <button onClick={handleCount} disabled={isPaused}>Contar</button>
-          <button onClick={handleSaveCount} disabled={isPaused}>Salvar</button>
-          {countMessage && <p>{countMessage}</p>}
-          <div>
-            <button onClick={handlePause} disabled={isPaused}>Pausar Contagem</button>
-            <button onClick={handleResume} disabled={!isPaused}>Retomar Contagem</button>
-          </div>
-        </div>
-      )}
+          <button onClick={handleUpload} className="btn primary">Upload</button>
+        </section>
 
-      {/* Relatório Final */}
-      <div>
-        <h2>Relatório Final</h2>
-        <button onClick={handleGenerateReport}>Gerar Relatório</button>
-        {finalReport && (
-          <div>
-            <h3>Resumo</h3>
-            <p>Total de Produtos em Sobra: {finalReport.summary.totalProductsInExcess}</p>
-            <p>Total de Produtos Faltantes: {finalReport.summary.totalProductsMissing}</p>
-            <p>Total de Produtos Regulares: {finalReport.summary.totalProductsRegular}</p>
-            <h3>Detalhes</h3>
-            <table border="1">
-              <thead>
-                <tr>
-                  <th>Código</th>
-                  <th>Produto</th>
-                  <th>Saldo em Estoque</th>
-                  <th>Contado</th>
-                  <th>Diferença</th>
-                </tr>
-              </thead>
-              <tbody>
-                {finalReport.details.map((item, index) => (
-                  <tr key={index}>
-                    <td>{item.Código}</td>
-                    <td>{item.Produto}</td>
-                    <td>{item.Saldo_Estoque}</td>
-                    <td>{item.Contado}</td>
-                    <td>{item.Diferença}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <button onClick={handleExport}>Exportar para Excel</button>
-          </div>
+        {/* Relatório Inicial */}
+        {initialReport && (
+          <section className="section">
+            <h2>Relatório Inicial</h2>
+            <p>Total de Unidades: {initialReport.totalUnits}</p>
+            <p>Total de Itens: {initialReport.totalItems}</p>
+          </section>
         )}
-      </div>
 
-      {/* Botão de Reset */}
-      <div>
-        <h2>Reiniciar Contagem</h2>
-        <button onClick={handleReset}>Reiniciar</button>
-      </div>
+        {/* Cadastro de Produto */}
+        {initialReport && (
+          <section className="section">
+            <h2>Cadastro de Produto</h2>
+            <input
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="Digite o código do produto"
+              className="input"
+              disabled={isPaused}
+            />
+            <button onClick={handleCount} className="btn primary" disabled={isPaused}>
+              Cadastro de Produto
+            </button>
+            {countMessage && <p className="message">{countMessage}</p>}
+          </section>
+        )}
+
+        {/* Controles de Contagem */}
+        {initialReport && (
+          <section className="section controls">
+            <button onClick={handlePause} className="btn secondary" disabled={isPaused}>
+              Pausar Contagem
+            </button>
+            <button onClick={handleResume} className="btn secondary" disabled={!isPaused}>
+              Retomar Contagem
+            </button>
+          </section>
+        )}
+
+        {/* Relatórios */}
+        <section className="section">
+          <h2>Relatórios</h2>
+          <button onClick={handleGenerateReport} className="btn primary" disabled={!initialReport}>
+            Relatórios
+          </button>
+          {finalReport && (
+            <div className="report">
+              <h3>Resumo</h3>
+              <p>Total de Produtos em Sobra: {finalReport.summary.totalProductsInExcess}</p>
+              <p>Total de Produtos Faltantes: {finalReport.summary.totalProductsMissing}</p>
+              <p>Total de Produtos Regulares: {finalReport.summary.totalProductsRegular}</p>
+              <h3>Detalhes</h3>
+              <table className="report-table">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Produto</th>
+                    <th>Saldo em Estoque</th>
+                    <th>Contado</th>
+                    <th>Diferença</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {finalReport.details.map((item, index) => (
+                    <tr key={index}>
+                      <td>{item.Código}</td>
+                      <td>{item.Produto}</td>
+                      <td>{item.Saldo_Estoque}</td>
+                      <td>{item.Contado}</td>
+                      <td>{item.Diferença}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button onClick={handleExport} className="btn secondary">
+                Exportar para Excel
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* Reiniciar Contagem */}
+        <section className="section">
+          <h2>Reiniciar Contagem</h2>
+          <button onClick={handleReset} className="btn danger">Finalizar Contagem</button>
+        </section>
+      </main>
     </div>
   );
 }
