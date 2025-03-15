@@ -95,7 +95,6 @@ function App() {
       const data = await res.json();
       if (data.summary) {
         setFinalReport(data);
-        window.location.href = '/export';
       } else {
         alert(data.message);
       }
