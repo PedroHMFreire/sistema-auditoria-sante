@@ -1,91 +1,93 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import './App.css';
 
 function App() {
-  const [file, setFile] = useState(null);
-  const [initialReport, setInitialReport] = useState(null);
-  const [code, setCode] = useState('');
-  const [countMessage, setCountMessage] = useState('');
+  const [systemFile, setSystemFile] = useState(null);
+  const [systemSummary, setSystemSummary] = useState(null);
+  const [storeCode, setStoreCode] = useState('');
+  const [storeMessage, setStoreMessage] = useState('');
   const [finalReport, setFinalReport] = useState(null);
-  const [isPaused, setIsPaused] = useState(false);
 
-  useEffect(() => {
-    fetch('/count-state')
-      .then(res => res.json())
-      .then(data => setIsPaused(data.isPaused))
-      .catch(err => console.error('Erro ao verificar estado:', err));
-  }, []);
-
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+  const handleSystemFileChange = (e) => {
+    setSystemFile(e.target.files[0]);
   };
 
-  const handleUpload = async () => {
-    if (!file) {
+  const handleUploadSystemExcel = async () => {
+    if (!systemFile) {
       alert('Por favor, selecione um arquivo Excel.');
       return;
     }
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', systemFile);
 
     try {
-      const res = await fetch('/upload', { method: 'POST', body: formData });
+      const res = await fetch('/upload-system-excel', {
+        method: 'POST',
+        body: formData,
+      });
       const data = await res.json();
       if (data.message) {
-        setInitialReport(data.initialReport);
+        setSystemSummary(data.summary);
         alert(data.message);
       } else {
         alert(data.error);
       }
     } catch (error) {
-      console.error('Erro ao fazer upload:', error);
-      alert('Erro ao fazer upload do arquivo.');
+      console.error('Erro ao fazer upload do arquivo Excel:', error);
+      alert('Erro ao fazer upload do arquivo Excel.');
     }
   };
 
-  const handleCount = async () => {
-    if (!code) {
-      alert('Por favor, insira um código.');
+  const handleUploadSystemText = async () => {
+    if (!systemFile) {
+      alert('Por favor, selecione um arquivo de texto.');
       return;
     }
 
+    const formData = new FormData();
+    formData.append('file', systemFile);
+
     try {
-      const res = await fetch('/count', {
+      const res = await fetch('/upload-system-text', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: formData,
       });
       const data = await res.json();
       if (data.message) {
-        setCountMessage(data.message);
+        setSystemSummary(data.summary);
+        alert(data.message);
       } else {
         alert(data.error);
       }
     } catch (error) {
-      console.error('Erro ao contar produto:', error);
-      alert('Erro ao contar produto.');
+      console.error('Erro ao fazer upload do arquivo de texto:', error);
+      alert('Erro ao fazer upload do arquivo de texto.');
     }
   };
 
-  const handleSave = async () => {
-    if (!code) {
-      alert('Por favor, insira um código para salvar.');
+  const handleCountStore = async () => {
+    if (!storeCode.trim()) {
+      alert('Por favor, insira um código da loja.');
       return;
     }
 
     try {
-      const res = await fetch('/save-count', {
+      const res = await fetch('/count-store', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code: storeCode }),
       });
       const data = await res.json();
-      alert(data.message);
-      setCode('');
+      if (data.message) {
+        setStoreMessage(data.message);
+        setStoreCode('');
+      } else {
+        alert(data.error);
+      }
     } catch (error) {
-      console.error('Erro ao salvar contagem:', error);
-      alert('Erro ao salvar contagem.');
+      console.error('Erro ao adicionar código da loja:', error);
+      alert('Erro ao adicionar código da loja.');
     }
   };
 
@@ -96,7 +98,7 @@ function App() {
       if (data.summary) {
         setFinalReport(data);
       } else {
-        alert(data.message);
+        alert(data.error);
       }
     } catch (error) {
       console.error('Erro ao finalizar contagem:', error);
@@ -109,11 +111,11 @@ function App() {
       const res = await fetch('/reset', { method: 'POST' });
       const data = await res.json();
       alert(data.message);
-      setInitialReport(null);
+      setSystemFile(null);
+      setSystemSummary(null);
+      setStoreCode('');
+      setStoreMessage('');
       setFinalReport(null);
-      setCountMessage('');
-      setCode('');
-      setIsPaused(false);
     } catch (error) {
       console.error('Erro ao reiniciar contagem:', error);
       alert('Erro ao reiniciar contagem.');
@@ -127,68 +129,61 @@ function App() {
       </header>
 
       <main className="App-main">
-        {/* Upload */}
+        {/* Upload de Dados do Sistema */}
         <section className="card">
-          <h2>Upload - Estoque em Sistema</h2>
+          <h2>Upload de Dados do Sistema</h2>
+          <p>Selecione um arquivo Excel (.xlsx, .xls) ou texto (.txt) com os dados do sistema (Código, Produto, Saldo):</p>
           <div className="field">
             <input
               type="file"
-              accept=".xlsx, .xls"
-              onChange={handleFileChange}
+              accept=".xlsx, .xls, .txt"
+              onChange={handleSystemFileChange}
               className="file-input"
             />
-            <button onClick={handleUpload} className="btn primary">Upload</button>
+            <button onClick={handleUploadSystemExcel} className="btn primary">
+              Upload Excel
+            </button>
+            <button onClick={handleUploadSystemText} className="btn secondary">
+              Upload Texto
+            </button>
           </div>
-          {initialReport && (
+          {systemSummary && (
             <div className="report-initial">
-              <h3>Relatório Inicial</h3>
-              <p>Total de Unidades: {initialReport.totalUnits}</p>
-              <p>Total de Itens: {initialReport.totalItems}</p>
+              <h3>Resumo do Sistema</h3>
+              <p>Total de Produtos: {systemSummary.totalItems}</p>
+              <p>Total de Unidades: {systemSummary.totalUnits}</p>
             </div>
           )}
         </section>
 
-        {/* Código do Produto */}
-        {initialReport && (
+        {/* Contagem em Loja */}
+        {systemSummary && (
           <section className="card">
-            <h2>Código do Produto - Contagem em Loja</h2>
+            <h2>Contagem em Loja</h2>
+            <p>Insira os códigos dos produtos contados na loja (um por vez):</p>
             <div className="field">
               <input
                 type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
+                value={storeCode}
+                onChange={(e) => setStoreCode(e.target.value)}
                 placeholder="Digite o código do produto"
                 className="text-input"
-                disabled={isPaused}
               />
-              <button onClick={handleCount} className="btn secondary" disabled={isPaused}>
-                Contar
+              <button onClick={handleCountStore} className="btn primary">
+                Adicionar
               </button>
             </div>
-            {countMessage && <p className="message">{countMessage}</p>}
-          </section>
-        )}
-
-        {/* Salvar */}
-        {initialReport && (
-          <section className="card">
-            <h2>Salvar Contagem</h2>
-            <div className="field">
-              <button onClick={handleSave} className="btn primary" disabled={isPaused}>
-                Salvar
-              </button>
-            </div>
+            {storeMessage && <p className="message">{storeMessage}</p>}
           </section>
         )}
 
         {/* Finalizar */}
-        {initialReport && (
+        {systemSummary && (
           <section className="card">
             <h2>Finalizar Contagem</h2>
             <div className="field">
-              <button onClick={handleFinalize} className="btn primary" disabled={isPaused}>
-                Finalizar
-              </button>
+              <button onClick={handleFinalize} className="btn primary">Finalizar</button>
+              <button onClick={handleReset} className="btn secondary">Reiniciar</button>
             </div>
             {finalReport && (
               <div className="report-final">
