@@ -5,8 +5,11 @@ function App() {
   const [systemFile, setSystemFile] = useState(null);
   const [systemSummary, setSystemSummary] = useState(null);
   const [storeCode, setStoreCode] = useState('');
+  const [storeQuantity, setStoreQuantity] = useState('');
   const [storeMessage, setStoreMessage] = useState('');
+  const [showReportOptions, setShowReportOptions] = useState(false);
   const [finalReport, setFinalReport] = useState(null);
+  const [reportType, setReportType] = useState(null);
 
   const handleSystemFileChange = (e) => {
     setSystemFile(e.target.files[0]);
@@ -71,17 +74,23 @@ function App() {
       alert('Por favor, insira um código da loja.');
       return;
     }
+    const qty = parseInt(storeQuantity, 10);
+    if (isNaN(qty) || qty <= 0) {
+      alert('Por favor, insira uma quantidade válida maior que 0.');
+      return;
+    }
 
     try {
       const res = await fetch('/count-store', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: storeCode }),
+        body: JSON.stringify({ code: storeCode, quantity: qty }),
       });
       const data = await res.json();
       if (data.message) {
         setStoreMessage(data.message);
         setStoreCode('');
+        setStoreQuantity('');
       } else {
         alert(data.error);
       }
@@ -91,18 +100,41 @@ function App() {
     }
   };
 
-  const handleFinalize = async () => {
+  const handleFinalize = () => {
+    setShowReportOptions(true);
+    setFinalReport(null);
+    setReportType(null);
+  };
+
+  const handleShowSyntheticReport = async () => {
     try {
-      const res = await fetch('/report');
+      const res = await fetch('/report-synthetic');
       const data = await res.json();
       if (data.summary) {
         setFinalReport(data);
+        setReportType('synthetic');
       } else {
         alert(data.error);
       }
     } catch (error) {
-      console.error('Erro ao finalizar contagem:', error);
-      alert('Erro ao finalizar contagem.');
+      console.error('Erro ao gerar relatório sintético:', error);
+      alert('Erro ao gerar relatório sintético.');
+    }
+  };
+
+  const handleShowDetailedReport = async () => {
+    try {
+      const res = await fetch('/report-detailed');
+      const data = await res.json();
+      if (data.summary) {
+        setFinalReport(data);
+        setReportType('detailed');
+      } else {
+        alert(data.error);
+      }
+    } catch (error) {
+      console.error('Erro ao gerar relatório detalhado:', error);
+      alert('Erro ao gerar relatório detalhado.');
     }
   };
 
@@ -114,8 +146,11 @@ function App() {
       setSystemFile(null);
       setSystemSummary(null);
       setStoreCode('');
+      setStoreQuantity('');
       setStoreMessage('');
+      setShowReportOptions(false);
       setFinalReport(null);
+      setReportType(null);
     } catch (error) {
       console.error('Erro ao reiniciar contagem:', error);
       alert('Erro ao reiniciar contagem.');
@@ -160,14 +195,22 @@ function App() {
         {systemSummary && (
           <section className="card">
             <h2>Contagem em Loja</h2>
-            <p>Insira os códigos dos produtos contados na loja (um por vez):</p>
+            <p>Insira o código e a quantidade dos produtos contados na loja:</p>
             <div className="field">
               <input
                 type="text"
                 value={storeCode}
                 onChange={(e) => setStoreCode(e.target.value)}
-                placeholder="Digite o código do produto"
+                placeholder="Código do produto"
                 className="text-input"
+              />
+              <input
+                type="number"
+                value={storeQuantity}
+                onChange={(e) => setStoreQuantity(e.target.value)}
+                placeholder="Quantidade"
+                className="text-input"
+                min="1"
               />
               <button onClick={handleCountStore} className="btn primary">
                 Adicionar
@@ -185,35 +228,54 @@ function App() {
               <button onClick={handleFinalize} className="btn primary">Finalizar</button>
               <button onClick={handleReset} className="btn secondary">Reiniciar</button>
             </div>
+            {showReportOptions && (
+              <div className="report-options">
+                <h3>Escolha o Tipo de Relatório</h3>
+                <div className="field">
+                  <button onClick={handleShowSyntheticReport} className="btn primary">
+                    Relatório Sintético
+                  </button>
+                  <button onClick={handleShowDetailedReport} className="btn secondary">
+                    Relatório Detalhado
+                  </button>
+                </div>
+              </div>
+            )}
             {finalReport && (
               <div className="report-final">
-                <h3>Relatório Final</h3>
+                <h3>
+                  {reportType === 'synthetic' ? 'Relatório Sintético' : 'Relatório Detalhado'}
+                </h3>
                 <p>Total de Produtos em Sobra: {finalReport.summary.totalProductsInExcess}</p>
                 <p>Total de Produtos Faltantes: {finalReport.summary.totalProductsMissing}</p>
                 <p>Total de Produtos Regulares: {finalReport.summary.totalProductsRegular}</p>
                 <h4>Detalhes</h4>
-                <table className="report-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th>
-                      <th>Produto</th>
-                      <th>Saldo em Estoque</th>
-                      <th>Contado</th>
-                      <th>Diferença</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {finalReport.details.map((item, index) => (
-                      <tr key={index}>
-                        <td>{item.Código}</td>
-                        <td>{item.Produto}</td>
-                        <td>{item.Saldo_Estoque}</td>
-                        <td>{item.Contado}</td>
-                        <td>{item.Diferença}</td>
+                {finalReport.details.length > 0 ? (
+                  <table className="report-table">
+                    <thead>
+                      <tr>
+                        <th>Código</th>
+                        <th>Produto</th>
+                        <th>Saldo em Estoque</th>
+                        <th>Contado</th>
+                        <th>Diferença</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {finalReport.details.map((item, index) => (
+                        <tr key={index}>
+                          <td>{item.Código}</td>
+                          <td>{item.Produto}</td>
+                          <td>{item.Saldo_Estoque}</td>
+                          <td>{item.Contado}</td>
+                          <td>{item.Diferença}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p>Nenhum produto com discrepâncias encontrado.</p>
+                )}
               </div>
             )}
           </section>
