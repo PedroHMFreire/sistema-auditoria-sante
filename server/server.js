@@ -27,9 +27,17 @@ const DATA_FILE = path.join(DATA_DIR, 'inventory-data.json');
 const STATE_FILE = path.join(DATA_DIR, 'count-state.json');
 
 // Estado do aplicativo
-let inventory = []; // Produtos do arquivo xlsx
-let countedItems = {}; // Produtos contados manualmente
-let countState = { isPaused: false }; // Estado da contagem (pausada ou ativa)
+let inventory = [];
+let countedItems = {};
+let countState = { isPaused: false };
+
+// Função para normalizar nomes de colunas
+function normalizeColumnName(name) {
+  return name
+    .toLowerCase() // Converter para minúsculas
+    .replace(/\s+/g, '_') // Substituir espaços por sublinhados
+    .replace(/[^a-z0-9_]/g, ''); // Remover caracteres especiais
+}
 
 // Carregar dados salvos se existirem
 function loadSavedData() {
@@ -120,23 +128,46 @@ app.post('/upload', upload.single('file'), (req, res) => {
 
     const workbook = xlsx.readFile(req.file.path);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    inventory = xlsx.utils.sheet_to_json(sheet);
-    
-    // Validar se a planilha tem o formato esperado
-    if (inventory.length === 0 || !inventory[0].hasOwnProperty('Código') || 
-        !inventory[0].hasOwnProperty('Produto') || !inventory[0].hasOwnProperty('Saldo_Estoque')) {
+    const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
+
+    // Verificar se há dados
+    if (rawData.length === 0) {
+      return res.status(400).json({ error: 'Planilha vazia' });
+    }
+
+    // Obter e normalizar os cabeçalhos
+    const headers = rawData[0].map(header => normalizeColumnName(header));
+    const expectedColumns = ['codigo', 'produto', 'saldo_estoque'];
+
+    // Verificar se todas as colunas esperadas estão presentes
+    const missingColumns = expectedColumns.filter(col => !headers.includes(col));
+    if (missingColumns.length > 0) {
       return res.status(400).json({ 
-        error: 'Formato de planilha inválido. É necessário ter colunas: Código, Produto e Saldo_Estoque' 
+        error: `Formato de planilha inválido. Colunas faltando: ${missingColumns.join(', ')}. Colunas esperadas: Código, Produto, Saldo_Estoque`
       });
     }
-    
-    // Normalizar dados
-    inventory = inventory.map(item => ({
-      Código: item.Código.toString(),
-      Produto: item.Produto,
-      Saldo_Estoque: parseFloat(item.Saldo_Estoque) || 0
-    }));
-    
+
+    // Mapear os dados com os cabeçalhos normalizados
+    const columnMap = {
+      codigo: headers.indexOf('codigo'),
+      produto: headers.indexOf('produto'),
+      saldo_estoque: headers.indexOf('saldo_estoque')
+    };
+
+    // Converter os dados em objetos com chaves normalizadas
+    inventory = rawData.slice(1).map(row => {
+      const normalizedRow = {
+        Código: row[columnMap.codigo] ? row[columnMap.codigo].toString() : '',
+        Produto: row[columnMap.produto] || '',
+        Saldo_Estoque: parseFloat(row[columnMap.saldo_estoque]) || 0
+      };
+      return normalizedRow;
+    }).filter(row => row.Código && row.Produto); // Filtrar linhas inválidas
+
+    if (inventory.length === 0) {
+      return res.status(400).json({ error: 'Nenhuma linha válida encontrada na planilha' });
+    }
+
     // Limpar contagens existentes
     countedItems = {};
     
@@ -178,7 +209,7 @@ app.post('/count', (req, res) => {
       return res.status(400).json({ error: 'Código de produto inválido' });
     }
     
-    // Incrementar contagem (suporte a múltiplos usuários)
+    // Incrementar contagem
     countedItems[code] = (countedItems[code] || 0) + 1;
     
     // Salvar dados imediatamente para evitar perdas
@@ -208,7 +239,6 @@ app.post('/save-count', (req, res) => {
       return res.status(400).json({ error: 'Código de produto inválido' });
     }
 
-    // Salvar dados (já está sendo salvo em /count, mas reforçamos aqui)
     saveData();
     
     res.status(200).json({ 
@@ -262,10 +292,9 @@ app.get('/report', (req, res) => {
       return res.status(200).json({ message: 'Nenhum dado disponível para gerar relatório' });
     }
     
-    // Calcular produtos em sobra, em falta e regulares
-    let productsInExcess = 0; // Produtos contados que não estão no sistema
-    let productsMissing = 0;  // Produtos no sistema que não foram contados
-    let productsRegular = 0;  // Produtos que batem (contagem = saldo)
+    let productsInExcess = 0;
+    let productsMissing = 0;
+    let productsRegular = 0;
 
     const reportDetails = inventory.map(item => {
       const counted = countedItems[item.Código] || 0;
@@ -288,7 +317,6 @@ app.get('/report', (req, res) => {
       };
     });
 
-    // Verificar produtos contados que não estão no sistema
     const inventoryCodes = new Set(inventory.map(item => item.Código));
     for (const code in countedItems) {
       if (!inventoryCodes.has(code)) {
@@ -324,7 +352,6 @@ app.get('/export', (req, res) => {
       return res.status(400).json({ error: 'Não há dados para exportar' });
     }
     
-    // Gerar relatório
     const report = inventory.map(item => ({
       Código: item.Código,
       Produto: item.Produto,
@@ -335,17 +362,17 @@ app.get('/export', (req, res) => {
     
     const worksheet = xlsx.utils.json_to_sheet(report);
     const columnWidths = [
-      { wpx: 100 }, // Código
-      { wpx: 250 }, // Produto
-      { wpx: 100 }, // Saldo_Estoque
-      { wpx: 100 }, // Contado
-      { wpx: 100 }  // Diferença
+      { wpx: 100 },
+      { wpx: 250 },
+      { wpx: 100 },
+      { wpx: 100 },
+      { wpx: 100 }
     ];
     worksheet['!cols'] = columnWidths;
     
     for (let i = 0; i < report.length; i++) {
       const rowIndex = i + 2;
-      const cellRef = xlsx.utils.encode_cell({r: rowIndex - 1, c: 4});
+      const cell MaliRef = xlsx.utils.encode_cell({r: rowIndex - 1, c: 4});
       if (!worksheet[cellRef]) continue;
       
       const difference = report[i].Diferença;
