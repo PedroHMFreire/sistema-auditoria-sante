@@ -26,21 +26,25 @@ body {
 .App-header h1 {
   font-size: 2em;
   color: #1a73e8;
+  margin-bottom: 10px;
 }
 
 .App-header nav {
-  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+  gap: 20px;
 }
 
 .nav-link {
-  color: #1a73e8;
   text-decoration: none;
-  margin: 0 15px;
+  color: #1a73e8;
   font-size: 1em;
+  padding: 5px 10px;
+  transition: color 0.3s;
 }
 
 .nav-link:hover {
-  text-decoration: underline;
+  color: #1557b0;
 }
 
 .App-main {
@@ -84,7 +88,7 @@ body {
   border-radius: 4px;
   font-size: 1em;
   width: 100%;
-  max-width: 150px; /* Ajustado para campos menores */
+  max-width: 150px;
   transition: border-color 0.3s;
 }
 
@@ -167,21 +171,78 @@ body {
   background-color: #f9f9f9;
 }
 
-.counts-list {
+.past-counts-list {
   list-style: none;
 }
 
-.counts-list li {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-  padding: 10px;
-  background-color: #f9f9f9;
-  border-radius: 4px;
+.past-count-item {
+  margin-bottom: 20px;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #fff;
 }
 
-.counts-list span {
-  flex-grow: 1;
+.past-count-item h3 {
+  font-size: 1.2em;
+  color: #202124;
+  margin-bottom: 10px;
+}
+
+.past-count-item p {
+  font-size: 1em;
+  color: #5f6368;
+  margin-bottom: 5px;
+}
+
+.report-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 15px;
+}
+
+/* Estilos para impressão */
+@media print {
+  .App-header,
+  .no-print,
+  .report-options,
+  .report-actions {
+    display: none !important;
+  }
+
+  .App-main {
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+  }
+
+  .card {
+    border: none;
+    background: none;
+    padding: 0;
+  }
+
+  .report-final {
+    margin: 0;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .report-table th,
+  .report-table td {
+    border: 1px solid #000;
+    padding: 5px;
+  }
+
+  .report-table th {
+    background-color: #e0e0e0;
+  }
+}
+
+.print-only {
+  display: none;
 }
 
 @media (max-width: 600px) {
@@ -211,12 +272,12 @@ body {
     width: 100%;
   }
 
-  .counts-list li {
+  .App-header nav {
     flex-direction: column;
-    text-align: center;
+    gap: 10px;
   }
 
-  .counts-list button {
-    margin-top: 10px;
+  .report-actions {
+    flex-direction: column;
   }
 }
