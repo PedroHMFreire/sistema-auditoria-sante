@@ -185,3 +185,237 @@ function App() {
     if (!finalReport) return;
 
     const reportText = `
+Relatório ${reportType === 'synthetic' ? 'Sintético' : 'Detalhado'} - ${finalReport.title}
+Data: ${new Date(finalReport.timestamp).toLocaleString()}
+
+Resumo:
+- Total de Produtos em Sobra: ${finalReport.summary.totalProductsInExcess}
+- Total de Produtos Faltantes: ${finalReport.summary.totalProductsMissing}
+- Total de Produtos Regulares: ${finalReport.summary.totalProductsRegular}
+
+Detalhes:
+${finalReport.details.length > 0 ? finalReport.details.map(item => `
+Código: ${item.Código}
+Produto: ${item.Produto}
+Saldo em Estoque: ${item.Saldo_Estoque}
+Contado: ${item.Contado}
+Diferença: ${item.Diferença}
+`).join('\n') : 'Nenhum produto com discrepâncias encontrado.'}
+    `.trim();
+
+    const blob = new Blob([reportText], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio-${reportType}-${finalReport.title}-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  };
+
+  const handleReset = async () => {
+    try {
+      const res = await fetch('/reset', { method: 'POST' });
+      const data = await res.json();
+      alert(data.message);
+      setSystemFile(null);
+      setSystemSummary(null);
+      setCountTitle('');
+      setStoreCode('');
+      setStoreQuantity('');
+      setStoreMessage('');
+      setShowReportOptions(false);
+      setFinalReport(null);
+      setReportType(null);
+    } catch (error) {
+      console.error('Erro ao reiniciar contagem:', error);
+      alert('Erro ao reiniciar contagem.');
+    }
+  };
+
+  return (
+    <Router>
+      <div className="App">
+        <header className="App-header">
+          <h1>Sistema de Auditoria Sante</h1>
+          <nav>
+            <Link to="/" className="nav-link">Nova Contagem</Link>
+            <Link to="/past-counts" className="nav-link">Contagens Passadas</Link>
+          </nav>
+        </header>
+
+        <main className="App-main">
+          <Switch>
+            <Route path="/" exact>
+              {/* Upload de Dados do Sistema */}
+              <section className="card">
+                <h2>Upload de Dados do Sistema</h2>
+                <p>Selecione um arquivo Excel (.xlsx, .xls) ou texto (.txt) com os dados do sistema (Código, Produto, Saldo):</p>
+                <div className="field">
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls, .txt"
+                    onChange={handleSystemFileChange}
+                    className="file-input"
+                  />
+                  <button onClick={handleUploadSystemExcel} className="btn primary">
+                    Upload Excel
+                  </button>
+                  <button onClick={handleUploadSystemText} className="btn secondary">
+                    Upload Texto
+                  </button>
+                </div>
+                {systemSummary && (
+                  <div className="report-initial">
+                    <h3>Resumo do Sistema</h3>
+                    <p>Total de Produtos: {systemSummary.totalItems}</p>
+                    <p>Total de Unidades: {systemSummary.totalUnits}</p>
+                  </div>
+                )}
+              </section>
+
+              {/* Título da Contagem */}
+              {systemSummary && (
+                <section className="card">
+                  <h2>Título da Contagem</h2>
+                  <p>Defina um título para identificar a contagem (ex.: CONTAGEM TSHIRT LOJA ILHA):</p>
+                  <div className="field">
+                    <input
+                      type="text"
+                      value={countTitle}
+                      onChange={(e) => setCountTitle(e.target.value)}
+                      placeholder="Ex.: CONTAGEM TSHIRT LOJA ILHA"
+                      className="text-input"
+                    />
+                    <button onClick={handleSetCountTitle} className="btn primary">
+                      Definir Título
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {/* Contagem em Loja */}
+              {systemSummary && (
+                <section className="card">
+                  <h2>Contagem em Loja</h2>
+                  <p>Insira o código e a quantidade dos produtos contados na loja (deixe quantidade em branco para 1):</p>
+                  <div className="field">
+                    <input
+                      type="text"
+                      value={storeCode}
+                      onChange={(e) => setStoreCode(e.target.value)}
+                      placeholder="Código do produto"
+                      className="text-input"
+                    />
+                    <input
+                      type="number"
+                      value={storeQuantity}
+                      onChange={(e) => setStoreQuantity(e.target.value)}
+                      placeholder="Quantidade (opcional)"
+                      className="text-input"
+                      min="1"
+                    />
+                    <button onClick={handleCountStore} className="btn primary">
+                      Adicionar
+                    </button>
+                  </div>
+                  {storeMessage && <p className="message">{storeMessage}</p>}
+                </section>
+              )}
+
+              {/* Salvar Contagem */}
+              {systemSummary && (
+                <section className="card">
+                  <h2>Salvar Contagem</h2>
+                  <div className="field">
+                    <button onClick={handleSaveCount} className="btn secondary">
+                      Salvar Contagem
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {/* Finalizar */}
+              {systemSummary && (
+                <section className="card">
+                  <h2>Finalizar Contagem</h2>
+                  <div className="field">
+                    <button onClick={handleFinalize} className="btn primary">Finalizar</button>
+                    <button onClick={handleReset} className="btn secondary">Reiniciar</button>
+                  </div>
+                  {showReportOptions && (
+                    <div className="report-options">
+                      <h3>Escolha o Tipo de Relatório</h3>
+                      <div className="field">
+                        <button onClick={handleShowSyntheticReport} className="btn primary">
+                          Relatório Sintético
+                        </button>
+                        <button onClick={handleShowDetailedReport} className="btn secondary">
+                          Relatório Detalhado
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {finalReport && (
+                    <div className="report-final" ref={reportRef}>
+                      <h3 className="no-print">
+                        {reportType === 'synthetic' ? 'Relatório Sintético' : 'Relatório Detalhado'} - {finalReport.title}
+                      </h3>
+                      <h3 className="print-only">
+                        {reportType === 'synthetic' ? 'Relatório Sintético' : 'Relatório Detalhado'} - {finalReport.title}
+                        <br />
+                        Data: {new Date(finalReport.timestamp).toLocaleString()}
+                      </h3>
+                      <p>Total de Produtos em Sobra: {finalReport.summary.totalProductsInExcess}</p>
+                      <p>Total de Produtos Faltantes: {finalReport.summary.totalProductsMissing}</p>
+                      <p>Total de Produtos Regulares: {finalReport.summary.totalProductsRegular}</p>
+                      <h4>Detalhes</h4>
+                      {finalReport.details.length > 0 ? (
+                        <table className="report-table">
+                          <thead>
+                            <tr>
+                              <th>Código</th>
+                              <th>Produto</th>
+                              <th>Saldo em Estoque</th>
+                              <th>Contado</th>
+                              <th>Diferença</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {finalReport.details.map((item, index) => (
+                              <tr key={index}>
+                                <td>{item.Código}</td>
+                                <td>{item.Produto}</td>
+                                <td>{item.Saldo_Estoque}</td>
+                                <td>{item.Contado}</td>
+                                <td>{item.Diferença}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p>Nenhum produto com discrepâncias encontrado.</p>
+                      )}
+                      <div className="report-actions no-print">
+                        <button onClick={handlePrintReport} className="btn primary">
+                          Imprimir
+                        </button>
+                        <button onClick={handleSaveReportAsText} className="btn secondary">
+                          Salvar como Texto
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+            </Route>
+            <Route path="/past-counts" component={PastCounts} />
+          </Switch>
+        </main>
+      </div>
+    </Router>
+  );
+}
+
+export default App;
