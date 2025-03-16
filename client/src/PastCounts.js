@@ -41,7 +41,7 @@ function PastCounts() {
             <ul className="past-counts-list">
               {pastCounts.map((count, index) => (
                 <li key={index} className="past-count-item">
-                  <h3>{count.title} - {new Date(count.timestamp).toLocaleString()}</h3>
+                  <h3>{count.title} - {new Date(count.timestamp).toLocaleString()} {count.type === 'pre-created' && <span style={{ color: '#34a853' }}>(Pré-criada)</span>}</h3>
                   <p>Total em Sobra: {count.summary.totalProductsInExcess}</p>
                   <p>Total Faltantes: {count.summary.totalProductsMissing}</p>
                   <p>Total Regulares: {count.summary.totalProductsRegular}</p>
@@ -55,7 +55,7 @@ function PastCounts() {
                     <div className="report-final" ref={reportRef}>
                       <h3 className="no-print">{count.title}</h3>
                       <h3 className="print-only">
-                        {count.type === 'synthetic' ? 'Relatório Sintético' : 'Relatório Detalhado'} - {count.title}
+                        {count.type === 'synthetic' ? 'Relatório Sintético' : count.type === 'detailed' ? 'Relatório Detalhado' : 'Contagem Pré-criada'} - {count.title}
                         <br />
                         Data: {new Date(count.timestamp).toLocaleString()}
                       </h3>
@@ -87,7 +87,7 @@ function PastCounts() {
                           </tbody>
                         </table>
                       ) : (
-                        <p>Nenhum produto com discrepâncias encontrado.</p>
+                        <p>{count.type === 'pre-created' ? 'Contagem ainda não iniciada.' : 'Nenhum produto com discrepâncias encontrado.'}</p>
                       )}
                       <div className="report-actions no-print">
                         <button onClick={handlePrintReport} className="btn primary">
