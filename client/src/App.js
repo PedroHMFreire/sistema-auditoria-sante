@@ -370,36 +370,43 @@ Diferença: ${item.Diferença}
               </section>
 
               {/* Carregar ou Definir Título da Contagem */}
-              {systemSummary && (
-                <section className="card">
-                  <h2>Título da Contagem</h2>
-                  <p>Carregue uma contagem existente ou defina um novo título:</p>
-                  <div className="field">
-                    <select
-                      value={selectedCountId !== null ? selectedCountId : ''}
-                      onChange={(e) => handleLoadCount(parseInt(e.target.value))}
-                      className="text-input"
-                    >
-                      <option value="">Selecione uma contagem existente</option>
-                      {pastCounts.map((count, index) => (
-                        <option key={index} value={index}>
-                          {count.title} ({count.type === 'pre-created' ? 'Pré-criada' : count.type})
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={countTitle}
-                      onChange={(e) => setCountTitle(e.target.value)}
-                      placeholder="Título da contagem"
-                      className="text-input"
-                    />
-                    <button onClick={handleSetCountTitle} className="btn primary">
-                      Definir Título
-                    </button>
-                  </div>
-                </section>
-              )}
+              <section className="card">
+                <h2>Título da Contagem</h2>
+                <p>Carregue uma contagem existente ou defina um novo título:</p>
+                <div className="field">
+                  <select
+                    value={selectedCountId !== null ? selectedCountId : ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '') {
+                        setSelectedCountId(null);
+                        setSystemSummary(null);
+                        setCountTitle('');
+                      } else {
+                        handleLoadCount(parseInt(value));
+                      }
+                    }}
+                    className="text-input"
+                  >
+                    <option value="">Selecione uma contagem existente</option>
+                    {pastCounts.map((count, index) => (
+                      <option key={index} value={index}>
+                        {count.title} ({count.type === 'pre-created' ? 'Pré-criada' : count.type})
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={countTitle}
+                    onChange={(e) => setCountTitle(e.target.value)}
+                    placeholder="Título da contagem"
+                    className="text-input"
+                  />
+                  <button onClick={handleSetCountTitle} className="btn primary">
+                    Definir Título
+                  </button>
+                </div>
+              </section>
 
               {/* Contagem em Loja */}
               {systemSummary && (
@@ -522,5 +529,6 @@ Diferença: ${item.Diferença}
       </div>
     </Router>
   );
+}
 
-  export default App;
+export default App;
