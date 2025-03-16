@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { BrowserRouter as Router, Route, Switch, Link } from 'react-router-dom';
 import PastCounts from './PastCounts';
@@ -13,10 +13,51 @@ function App() {
   const [showReportOptions, setShowReportOptions] = useState(false);
   const [finalReport, setFinalReport] = useState(null);
   const [reportType, setReportType] = useState(null);
+  const [pastCounts, setPastCounts] = useState([]);
+  const [selectedCountId, setSelectedCountId] = useState(null);
   const reportRef = useRef(null);
+
+  useEffect(() => {
+    fetch('/past-counts')
+      .then(res => res.json())
+      .then(data => setPastCounts(data))
+      .catch(err => console.error('Erro ao carregar contagens passadas:', err));
+  }, []);
 
   const handleSystemFileChange = (e) => {
     setSystemFile(e.target.files[0]);
+  };
+
+  const handleCreateCountFromExcel = async () => {
+    if (!systemFile) {
+      alert('Por favor, selecione um arquivo Excel.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', systemFile);
+    formData.append('title', countTitle || '');
+
+    try {
+      const res = await fetch('/create-count-from-excel', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.message) {
+        alert(data.message);
+        setSystemFile(null);
+        setCountTitle('');
+        fetch('/past-counts')
+          .then(res => res.json())
+          .then(data => setPastCounts(data));
+      } else {
+        alert(data.error);
+      }
+    } catch (error) {
+      console.error('Erro ao criar contagem a partir de Excel:', error);
+      alert('Erro ao criar contagem.');
+    }
   };
 
   const handleUploadSystemExcel = async () => {
@@ -73,6 +114,28 @@ function App() {
     }
   };
 
+  const handleLoadCount = async (countId) => {
+    try {
+      const res = await fetch('/load-count', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ countId }),
+      });
+      const data = await res.json();
+      if (data.message) {
+        setSystemSummary({ totalItems: data.systemData.length, totalUnits: data.systemData.reduce((sum, item) => sum + item.balance, 0) });
+        setCountTitle(data.countTitle);
+        setSelectedCountId(countId);
+        alert(data.message);
+      } else {
+        alert(data.error);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar contagem:', error);
+      alert('Erro ao carregar contagem.');
+    }
+  };
+
   const handleSetCountTitle = async () => {
     if (!countTitle.trim()) {
       alert('Por favor, insira um título para a contagem.');
@@ -88,6 +151,12 @@ function App() {
       const data = await res.json();
       if (data.message) {
         alert(data.message);
+        if (selectedCountId !== null) {
+          pastCounts[selectedCountId].title = countTitle;
+          fetch('/past-counts')
+            .then(res => res.json())
+            .then(data => setPastCounts(data));
+        }
       } else {
         alert(data.error);
       }
@@ -228,6 +297,7 @@ Diferença: ${item.Diferença}
       setShowReportOptions(false);
       setFinalReport(null);
       setReportType(null);
+      setSelectedCountId(null);
     } catch (error) {
       console.error('Erro ao reiniciar contagem:', error);
       alert('Erro ao reiniciar contagem.');
@@ -248,7 +318,31 @@ Diferença: ${item.Diferença}
         <main className="App-main">
           <Switch>
             <Route path="/" exact>
-              {/* Upload de Dados do Sistema */}
+              {/* Criar Contagem Prévia */}
+              <section className="card">
+                <h2>Criar Contagem Prévia</h2>
+                <p>Carregue um arquivo Excel com o estoque para criar uma contagem prévia (opcional: adicione um título):</p>
+                <div className="field">
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls"
+                    onChange={handleSystemFileChange}
+                    className="file-input"
+                  />
+                  <input
+                    type="text"
+                    value={countTitle}
+                    onChange={(e) => setCountTitle(e.target.value)}
+                    placeholder="Título da contagem (opcional)"
+                    className="text-input"
+                  />
+                  <button onClick={handleCreateCountFromExcel} className="btn primary">
+                    Criar Contagem
+                  </button>
+                </div>
+              </section>
+
+              {/* Upload de Dados do Sistema (para contagens tradicionais) */}
               <section className="card">
                 <h2>Upload de Dados do Sistema</h2>
                 <p>Selecione um arquivo Excel (.xlsx, .xls) ou texto (.txt) com os dados do sistema (Código, Produto, Saldo):</p>
@@ -275,17 +369,29 @@ Diferença: ${item.Diferença}
                 )}
               </section>
 
-              {/* Título da Contagem */}
+              {/* Carregar ou Definir Título da Contagem */}
               {systemSummary && (
                 <section className="card">
                   <h2>Título da Contagem</h2>
-                  <p>Defina um título para identificar a contagem (ex.: CONTAGEM TSHIRT LOJA ILHA):</p>
+                  <p>Carregue uma contagem existente ou defina um novo título:</p>
                   <div className="field">
+                    <select
+                      value={selectedCountId !== null ? selectedCountId : ''}
+                      onChange={(e) => handleLoadCount(parseInt(e.target.value))}
+                      className="text-input"
+                    >
+                      <option value="">Selecione uma contagem existente</option>
+                      {pastCounts.map((count, index) => (
+                        <option key={index} value={index}>
+                          {count.title} ({count.type === 'pre-created' ? 'Pré-criada' : count.type})
+                        </option>
+                      ))}
+                    </select>
                     <input
                       type="text"
                       value={countTitle}
                       onChange={(e) => setCountTitle(e.target.value)}
-                      placeholder="Ex.: CONTAGEM TSHIRT LOJA ILHA"
+                      placeholder="Título da contagem"
                       className="text-input"
                     />
                     <button onClick={handleSetCountTitle} className="btn primary">
@@ -416,6 +522,5 @@ Diferença: ${item.Diferença}
       </div>
     </Router>
   );
-}
 
-export default App;
+  export default App;
