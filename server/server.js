@@ -102,13 +102,11 @@ const upload = multer({
       file.mimetype.includes('excel') ||
       file.mimetype.includes('spreadsheetml') ||
       file.originalname.endsWith('.xlsx') ||
-      file.originalname.endsWith('.xls') ||
-      file.mimetype === 'text/plain' ||
-      file.originalname.endsWith('.txt')
+      file.originalname.endsWith('.xls')
     ) {
       cb(null, true);
     } else {
-      cb(new Error('Apenas arquivos Excel ou texto são permitidos'), false);
+      cb(new Error('Apenas arquivos Excel são permitidos'), false);
     }
   },
   limits: {
@@ -124,7 +122,106 @@ function normalizeColumnName(name) {
     .replace(/[^a-z0-9_]/g, '');
 }
 
-// Rota para upload de planilha Excel do sistema
+// Rota para criar contagem prévia a partir de Excel
+app.post('/create-count-from-excel', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    }
+
+    const { title } = req.body; // Título opcional enviado pelo frontend
+    const workbook = xlsx.readFile(req.file.path);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
+
+    if (rawData.length === 0) {
+      return res.status(400).json({ error: 'Planilha vazia' });
+    }
+
+    const headers = rawData[0].map(header => normalizeColumnName(header));
+    const expectedColumns = ['codigo', 'produto', 'saldo', 'saldo_estoque'];
+
+    const codeCol = headers.indexOf('codigo');
+    const productCol = headers.indexOf('produto');
+    let balanceCol = headers.indexOf('saldo');
+    if (balanceCol === -1) balanceCol = headers.indexOf('saldo_estoque');
+
+    if (codeCol === -1 || productCol === -1 || balanceCol === -1) {
+      return res.status(400).json({
+        error: 'Formato de planilha inválido. Colunas esperadas: Código, Produto, Saldo (ou Saldo_Estoque)',
+      });
+    }
+
+    const systemData = rawData.slice(1).map(row => ({
+      code: row[codeCol] ? row[codeCol].toString() : '',
+      product: row[productCol] || '',
+      balance: parseFloat(row[balanceCol]) || 0,
+    })).filter(item => item.code && item.product);
+
+    if (systemData.length === 0) {
+      return res.status(400).json({ error: 'Nenhuma linha válida encontrada na planilha' });
+    }
+
+    const newCount = {
+      title: title || `Contagem sem título - ${new Date().toISOString().slice(0, 10)}`,
+      timestamp: new Date().toISOString(),
+      type: 'pre-created',
+      systemData: systemData,
+      storeData: [],
+      summary: {
+        totalProductsInExcess: 0,
+        totalProductsMissing: 0,
+        totalProductsRegular: 0,
+      },
+      details: [],
+    };
+
+    pastCounts.push(newCount);
+    savePastCounts();
+
+    fs.unlink(req.file.path, (err) => {
+      if (err) console.error('Erro ao excluir arquivo temporário:', err);
+    });
+
+    res.status(200).json({
+      message: 'Contagem pré-criada com sucesso!',
+      countId: pastCounts.length - 1,
+      title: newCount.title,
+    });
+  } catch (error) {
+    console.error('Erro ao criar contagem a partir de Excel:', error);
+    res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
+  }
+});
+
+// Rota para carregar uma contagem existente
+app.post('/load-count', (req, res) => {
+  try {
+    const { countId } = req.body;
+    if (countId < 0 || countId >= pastCounts.length) {
+      return res.status(400).json({ error: 'ID de contagem inválido' });
+    }
+
+    const selectedCount = pastCounts[countId];
+    systemData = selectedCount.systemData || [];
+    storeData = selectedCount.storeData || [];
+    countTitle = selectedCount.title;
+
+    saveData();
+
+    res.status(200).json({
+      message: 'Contagem carregada com sucesso!',
+      systemData,
+      storeData,
+      countTitle,
+    });
+  } catch (error) {
+    console.error('Erro ao carregar contagem:', error);
+    res.status(500).json({ error: 'Erro ao carregar contagem: ' + error.message });
+  }
+});
+
+// Rota para upload de planilha Excel do sistema (manter para compatibilidade)
 app.post('/upload-system-excel', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
@@ -345,6 +442,8 @@ function generateReport(filterDifferences = false) {
     title: countTitle || 'Contagem sem título',
     timestamp: new Date().toISOString(),
     type: filterDifferences ? 'synthetic' : 'detailed',
+    systemData: systemData,
+    storeData: storeData,
     summary: {
       totalProductsInExcess: productsInExcess,
       totalProductsMissing: productsMissing,
