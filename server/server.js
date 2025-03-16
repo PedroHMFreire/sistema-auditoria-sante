@@ -22,67 +22,67 @@ const DATA_DIR = path.join(__dirname, 'data');
   }
 });
 
-// Arquivos para armazenar dados persistentes
-const CURRENT_DATA_FILE = path.join(DATA_DIR, 'current-inventory-data.json');
-const SAVED_COUNTS_FILE = path.join(DATA_DIR, 'saved-counts.json');
+// Arquivos para armazenar dados
+const DATA_FILE = path.join(DATA_DIR, 'inventory-data.json');
+const PAST_COUNTS_FILE = path.join(DATA_DIR, 'past-counts.json');
 
 // Estado do aplicativo
 let systemData = []; // Lista de produtos no sistema: [{code: "140066", product: "BONE SANTE PRETO", balance: 50}]
-let storeData = [];  // Lista de contagens atuais: [{code: "140066", quantity: 5}, ...]
-let currentTitle = ''; // Título da contagem atual
+let storeData = []; // Lista de códigos contados na loja: [{code: "140066", quantity: 5}]
+let countTitle = ''; // Título da contagem atual
 
 // Carregar dados salvos se existirem
-function loadCurrentData() {
+function loadSavedData() {
   try {
-    if (fs.existsSync(CURRENT_DATA_FILE)) {
-      const data = JSON.parse(fs.readFileSync(CURRENT_DATA_FILE, 'utf8'));
+    if (fs.existsSync(DATA_FILE)) {
+      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
       systemData = data.systemData || [];
       storeData = data.storeData || [];
-      currentTitle = data.currentTitle || '';
-      console.log('Dados atuais carregados do arquivo');
+      countTitle = data.countTitle || '';
+      console.log('Dados carregados do arquivo');
     }
   } catch (error) {
-    console.error('Erro ao carregar dados atuais:', error);
+    console.error('Erro ao carregar dados salvos:', error);
   }
 }
 
-// Carregar contagens salvas
-let savedCounts = [];
-function loadSavedCounts() {
+// Carregar contagens passadas
+let pastCounts = [];
+function loadPastCounts() {
   try {
-    if (fs.existsSync(SAVED_COUNTS_FILE)) {
-      savedCounts = JSON.parse(fs.readFileSync(SAVED_COUNTS_FILE, 'utf8'));
-      console.log('Contagens salvas carregadas do arquivo');
+    if (fs.existsSync(PAST_COUNTS_FILE)) {
+      pastCounts = JSON.parse(fs.readFileSync(PAST_COUNTS_FILE, 'utf8')) || [];
+      console.log('Contagens passadas carregadas');
     }
   } catch (error) {
-    console.error('Erro ao carregar contagens salvas:', error);
+    console.error('Erro ao carregar contagens passadas:', error);
   }
 }
 
-// Salvar dados atuais
-function saveCurrentData() {
+// Salvar dados em arquivo
+function saveData() {
   try {
-    const data = { systemData, storeData, currentTitle };
-    fs.writeFileSync(CURRENT_DATA_FILE, JSON.stringify(data, null, 2));
-    console.log('Dados atuais salvos em arquivo');
+    const data = { systemData, storeData, countTitle };
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+    console.log('Dados salvos em arquivo');
   } catch (error) {
-    console.error('Erro ao salvar dados atuais:', error);
+    console.error('Erro ao salvar dados:', error);
   }
 }
 
-// Salvar contagens finalizadas
-function saveSavedCounts() {
+// Salvar contagens passadas
+function savePastCounts() {
   try {
-    fs.writeFileSync(SAVED_COUNTS_FILE, JSON.stringify(savedCounts, null, 2));
-    console.log('Contagens salvas atualizadas');
+    fs.writeFileSync(PAST_COUNTS_FILE, JSON.stringify(pastCounts, null, 2));
+    console.log('Contagens passadas salvas');
   } catch (error) {
-    console.error('Erro ao salvar contagens:', error);
+    console.error('Erro ao salvar contagens passadas:', error);
   }
 }
 
 // Carregar dados iniciais
-loadCurrentData();
-loadSavedCounts();
+loadSavedData();
+loadPastCounts();
 
 // Configuração de upload
 const storage = multer.diskStorage({
@@ -163,7 +163,7 @@ app.post('/upload-system-excel', upload.single('file'), (req, res) => {
       return res.status(400).json({ error: 'Nenhuma linha válida encontrada na planilha' });
     }
 
-    saveCurrentData();
+    saveData();
 
     const totalItems = systemData.length;
     const totalUnits = systemData.reduce((sum, item) => sum + item.balance, 0);
@@ -208,7 +208,7 @@ app.post('/upload-system-text', upload.single('file'), (req, res) => {
       return res.status(400).json({ error: 'Nenhuma linha válida encontrada no arquivo de texto' });
     }
 
-    saveCurrentData();
+    saveData();
 
     const totalItems = systemData.length;
     const totalUnits = systemData.reduce((sum, item) => sum + item.balance, 0);
@@ -230,20 +230,36 @@ app.post('/upload-system-text', upload.single('file'), (req, res) => {
   }
 });
 
-// Rota para adicionar código da loja com quantidade (opcional)
+// Rota para definir o título da contagem
+app.post('/set-count-title', (req, res) => {
+  try {
+    const { title } = req.body;
+    if (!title || typeof title !== 'string') {
+      return res.status(400).json({ error: 'Título inválido' });
+    }
+    countTitle = title.trim();
+    saveData();
+    res.status(200).json({ message: `Título da contagem definido como "${countTitle}"` });
+  } catch (error) {
+    console.error('Erro ao definir título:', error);
+    res.status(500).json({ error: 'Erro ao definir título: ' + error.message });
+  }
+});
+
+// Rota para adicionar código da loja com quantidade opcional
 app.post('/count-store', (req, res) => {
   try {
     const { code, quantity } = req.body;
     if (!code || typeof code !== 'string') {
       return res.status(400).json({ error: 'Código inválido' });
     }
-    const qty = parseInt(quantity, 10) || 1; // Assume 1 se quantidade estiver em branco
+    const qty = parseInt(quantity, 10) || 1; // Padrão 1 se quantity estiver em branco ou inválido
     if (qty <= 0) {
       return res.status(400).json({ error: 'Quantidade inválida. Deve ser maior que 0.' });
     }
 
     storeData.push({ code, quantity: qty });
-    saveCurrentData();
+    saveData();
 
     res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}` });
   } catch (error) {
@@ -252,28 +268,14 @@ app.post('/count-store', (req, res) => {
   }
 });
 
-// Rota para salvar contagem parcial
+// Rota para salvar contagem intermediária
 app.post('/save-count', (req, res) => {
   try {
-    if (!currentTitle) {
-      return res.status(400).json({ error: 'Por favor, defina um título para a contagem antes de salvar.' });
+    if (storeData.length === 0) {
+      return res.status(400).json({ error: 'Nenhuma contagem para salvar' });
     }
-    if (systemData.length === 0 || storeData.length === 0) {
-      return res.status(400).json({ error: 'Nenhum dado de sistema ou contagem disponível para salvar.' });
-    }
-
-    const countId = Date.now().toString(); // ID único baseado no timestamp
-    const savedCount = {
-      id: countId,
-      title: currentTitle,
-      systemData: [...systemData],
-      storeData: [...storeData],
-      timestamp: new Date().toISOString(),
-    };
-    savedCounts.push(savedCount);
-    saveSavedCounts();
-
-    res.status(200).json({ message: 'Contagem salva com sucesso', countId });
+    saveData();
+    res.status(200).json({ message: 'Contagem salva com sucesso' });
   } catch (error) {
     console.error('Erro ao salvar contagem:', error);
     res.status(500).json({ error: 'Erro ao salvar contagem: ' + error.message });
@@ -339,8 +341,10 @@ function generateReport(filterDifferences = false) {
     reportDetails = reportDetails.filter(item => item.Diferença !== 0);
   }
 
-  return {
-    title: currentTitle,
+  const report = {
+    title: countTitle || 'Contagem sem título',
+    timestamp: new Date().toISOString(),
+    type: filterDifferences ? 'synthetic' : 'detailed',
     summary: {
       totalProductsInExcess: productsInExcess,
       totalProductsMissing: productsMissing,
@@ -348,6 +352,12 @@ function generateReport(filterDifferences = false) {
     },
     details: reportDetails,
   };
+
+  // Salvar a contagem no histórico
+  pastCounts.push(report);
+  savePastCounts();
+
+  return report;
 }
 
 // Rota para relatório detalhado (todos os produtos)
@@ -372,34 +382,13 @@ app.get('/report-synthetic', (req, res) => {
   }
 });
 
-// Rota para listar contagens salvas
-app.get('/get-counts', (req, res) => {
+// Rota para listar contagens passadas
+app.get('/past-counts', (req, res) => {
   try {
-    res.status(200).json(savedCounts);
+    res.status(200).json(pastCounts);
   } catch (error) {
-    console.error('Erro ao listar contagens:', error);
-    res.status(500).json({ error: 'Erro ao listar contagens: ' + error.message });
-  }
-});
-
-// Rota para recuperar relatório de uma contagem específica
-app.get('/get-count-report/:id', (req, res) => {
-  try {
-    const { id } = req.params;
-    const count = savedCounts.find(c => c.id === id);
-    if (!count) {
-      return res.status(404).json({ error: 'Contagem não encontrada' });
-    }
-
-    // Recriar o estado temporário para gerar o relatório
-    systemData = count.systemData;
-    storeData = count.storeData;
-    currentTitle = count.title;
-    const report = generateReport(false); // Detalhado por padrão
-    res.status(200).json(report);
-  } catch (error) {
-    console.error('Erro ao recuperar relatório:', error);
-    res.status(500).json({ error: 'Erro ao recuperar relatório: ' + error.message });
+    console.error('Erro ao listar contagens passadas:', error);
+    res.status(500).json({ error: 'Erro ao listar contagens passadas: ' + error.message });
   }
 });
 
@@ -408,28 +397,12 @@ app.post('/reset', (req, res) => {
   try {
     systemData = [];
     storeData = [];
-    currentTitle = '';
-    saveCurrentData();
+    countTitle = '';
+    saveData();
     res.status(200).json({ message: 'Dados reiniciados com sucesso' });
   } catch (error) {
     console.error('Erro ao reiniciar contagem:', error);
     res.status(500).json({ error: 'Erro ao reiniciar contagem: ' + error.message });
-  }
-});
-
-// Rota para definir o título da contagem
-app.post('/set-title', (req, res) => {
-  try {
-    const { title } = req.body;
-    if (!title || typeof title !== 'string') {
-      return res.status(400).json({ error: 'Título inválido' });
-    }
-    currentTitle = title;
-    saveCurrentData();
-    res.status(200).json({ message: 'Título definido com sucesso' });
-  } catch (error) {
-    console.error('Erro ao definir título:', error);
-    res.status(500).json({ error: 'Erro ao definir título: ' + error.message });
   }
 });
 
@@ -439,7 +412,6 @@ app.get('/health', (req, res) => {
     status: 'ok',
     systemDataCount: systemData.length,
     storeDataCount: storeData.length,
-    savedCountsCount: savedCounts.length,
   });
 });
 
@@ -478,14 +450,14 @@ app.listen(port, () => {
 // Manipular interrupções para salvar dados antes de encerrar
 process.on('SIGINT', () => {
   console.log('Servidor encerrando, salvando dados...');
-  saveCurrentData();
-  saveSavedCounts();
+  saveData();
+  savePastCounts();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   console.log('Servidor encerrando, salvando dados...');
-  saveCurrentData();
-  saveSavedCounts();
+  saveData();
+  savePastCounts();
   process.exit(0);
 });
