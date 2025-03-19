@@ -204,6 +204,12 @@ nav {
   flex-wrap: wrap;
 }
 
+.count-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
 .report-final {
   margin-top: 20px;
 }
@@ -284,7 +290,7 @@ nav {
 }
 
 @media print {
-  .App-header, .no-print, .theme-toggle, .count-categories {
+  .App-header, .no-print, .theme-toggle, .count-categories, .count-actions {
     display: none !important;
   }
   .App-main {
@@ -344,5 +350,12 @@ nav {
   .category-link {
     width: 100%;
     text-align: center;
+  }
+  .count-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .count-actions .btn {
+    width: 100%;
   }
 }
