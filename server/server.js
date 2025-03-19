@@ -141,7 +141,11 @@ app.post('/create-count-from-excel', upload.single('file'), (req, res) => {
     savePastCounts();
 
     fs.unlink(req.file.path, (err) => err && console.error('Erro ao excluir arquivo:', err));
-    res.status(200).json({ message: 'Contagem pré-criada com sucesso!', countId: pastCounts.length - 1 });
+    res.status(200).json({
+      message: 'Contagem pré-criada com sucesso!',
+      countId: pastCounts.length - 1,
+      systemData, // Retornando systemData na resposta
+    });
   } catch (error) {
     console.error('Erro ao criar contagem:', error);
     res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
@@ -194,7 +198,7 @@ app.post('/upload-system-excel', upload.single('file'), (req, res) => {
       balance: parseFloat(row[balanceCol]) || 0,
     })).filter(item => item.code && item.product);
 
-    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida' });
+    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada' });
 
     saveData();
     const totalItems = systemData.length;
