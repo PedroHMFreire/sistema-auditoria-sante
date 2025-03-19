@@ -15,7 +15,7 @@ function App() {
   const [finalReport, setFinalReport] = useState(null);
   const [reportType, setReportType] = useState(null);
   const [selectedCountId, setSelectedCountId] = useState(null);
-  const [storeData, setStoreData] = useState([]); // Adicionando storeData ao estado
+  const [storeData, setStoreData] = useState([]);
   const reportRef = useRef(null);
 
   useEffect(() => {
@@ -42,10 +42,17 @@ function App() {
         alert(data.message);
         setSystemFile(null);
         setCountTitle('');
-        setSystemSummary({ totalItems: data.systemData.length, totalUnits: data.systemData.reduce((sum, item) => sum + item.balance, 0) });
-        setStoreData([]); // Resetando storeData ao criar nova contagem
+        if (data.systemData) {
+          setSystemSummary({
+            totalItems: data.systemData.length,
+            totalUnits: data.systemData.reduce((sum, item) => sum + (item.balance || 0), 0),
+          });
+        }
+        setStoreData([]);
         fetch('/past-counts').then(res => res.json()).then(data => setPastCounts(data));
-      } else alert(data.error);
+      } else {
+        alert(data.error || 'Erro ao criar contagem.');
+      }
     } catch (error) {
       console.error('Erro ao criar contagem:', error);
       alert('Erro ao criar contagem.');
@@ -81,9 +88,9 @@ function App() {
       });
       const data = await res.json();
       if (data.message) {
-        setSystemSummary({ totalItems: data.systemData.length, totalUnits: data.systemData.reduce((sum, item) => sum + item.balance, 0) });
+        setSystemSummary({ totalItems: data.systemData.length, totalUnits: data.systemData.reduce((sum, item) => sum + (item.balance || 0), 0) });
         setCountTitle(data.countTitle);
-        setStoreData(data.storeData || []); // Carregando storeData do backend
+        setStoreData(data.storeData || []);
         setSelectedCountId(countId);
         alert(data.message);
       } else alert(data.error);
@@ -137,7 +144,7 @@ function App() {
       const data = await res.json();
       if (data.message) {
         setStoreMessage(data.message);
-        setStoreData(prev => [...prev, { code: storeCode, quantity: qty }]); // Atualizando storeData localmente
+        setStoreData(prev => [...prev, { code: storeCode, quantity: qty }]);
         setStoreCode('');
         setStoreQuantity('');
       } else alert(data.error);
@@ -236,7 +243,7 @@ Diferença: ${item.Diferença}`).join('\n') : 'Sem discrepâncias.'}
       setFinalReport(null);
       setReportType(null);
       setSelectedCountId(null);
-      setStoreData([]); // Resetando storeData ao reiniciar
+      setStoreData([]);
     } catch (error) {
       console.error('Erro ao reiniciar:', error);
       alert('Erro ao reiniciar.');
