@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useHistory } from 'react-router-dom';
 import './App.css';
 
 function PastCounts() {
@@ -7,6 +7,7 @@ function PastCounts() {
   const [expandedReport, setExpandedReport] = useState(null);
   const reportRef = useRef(null);
   const location = useLocation();
+  const history = useHistory();
   const status = new URLSearchParams(location.search).get('status') || '';
 
   useEffect(() => {
@@ -17,7 +18,28 @@ function PastCounts() {
   }, [status]);
 
   const handleToggleReport = (index) => setExpandedReport(expandedReport === index ? null : index);
+
   const handlePrintReport = () => window.print();
+
+  const handleStartCount = async (countId) => {
+    try {
+      const res = await fetch('/load-count', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ countId }),
+      });
+      const data = await res.json();
+      if (data.message) {
+        alert(data.message);
+        history.push('/'); // Redireciona para a página inicial para continuar a contagem
+      } else {
+        alert(data.error);
+      }
+    } catch (error) {
+      console.error('Erro ao iniciar contagem:', error);
+      alert('Erro ao iniciar contagem.');
+    }
+  };
 
   const getSectionTitle = () => {
     switch (status) {
@@ -45,14 +67,26 @@ function PastCounts() {
                 <li key={index} className="past-count-item">
                   <h3>
                     {count.title} - {new Date(count.timestamp).toLocaleString()}
-                    {count.status === 'pre-created' && <span style={{ color: '#ff6200' }}>(Pré-criada)</span>}
+                    {count.status === 'created' && <span style={{ color: '#ff6200' }}>(Pré-criada)</span>}
                   </h3>
+                  <p>Total de Produtos: {count.systemData.length}</p>
+                  <p>Total de Unidades: {count.systemData.reduce((sum, item) => sum + (item.balance || 0), 0)}</p>
                   <p>Total em Sobra: {count.summary.totalProductsInExcess}</p>
                   <p>Total Faltantes: {count.summary.totalProductsMissing}</p>
                   <p>Total Regulares: {count.summary.totalProductsRegular}</p>
-                  <button className="btn secondary" onClick={() => handleToggleReport(index)}>
-                    {expandedReport === index ? 'Ocultar' : 'Ver Detalhes'}
-                  </button>
+                  <div className="count-actions">
+                    {count.status === 'created' && (
+                      <button
+                        className="btn primary"
+                        onClick={() => handleStartCount(index)}
+                      >
+                        Iniciar Contagem
+                      </button>
+                    )}
+                    <button className="btn secondary" onClick={() => handleToggleReport(index)}>
+                      {expandedReport === index ? 'Ocultar' : 'Ver Detalhes'}
+                    </button>
+                  </div>
                   {expandedReport === index && (
                     <div className="report-final" ref={reportRef}>
                       <h3 className="no-print">{count.title}</h3>
@@ -60,6 +94,8 @@ function PastCounts() {
                         {count.type === 'synthetic' ? 'Sintético' : count.type === 'detailed' ? 'Detalhado' : 'Pré-criada'} - {count.title}
                         <br />Data: {new Date(count.timestamp).toLocaleString()}
                       </h3>
+                      <p>Total de Produtos: {count.systemData.length}</p>
+                      <p>Total de Unidades: {count.systemData.reduce((sum, item) => sum + (item.balance || 0), 0)}</p>
                       <p>Total em Sobra: {count.summary.totalProductsInExcess}</p>
                       <p>Total Faltantes: {count.summary.totalProductsMissing}</p>
                       <p>Total Regulares: {count.summary.totalProductsRegular}</p>
