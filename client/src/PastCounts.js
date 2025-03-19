@@ -31,7 +31,7 @@ function PastCounts() {
       const data = await res.json();
       if (data.message) {
         alert(data.message);
-        history.push('/'); // Redireciona para a página inicial para continuar a contagem
+        history.push(`/count/${countId}`); // Redireciona para a página da contagem
       } else {
         alert(data.error);
       }
