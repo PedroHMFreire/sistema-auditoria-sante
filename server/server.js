@@ -1,235 +1,412 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useHistory, Link } from 'react-router-dom';
-import './App.css';
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
+const multer = require('multer');
+const xlsx = require('xlsx');
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
 
-function ActiveCount() {
-  const { countId } = useParams();
-  const history = useHistory();
-  const [systemSummary, setSystemSummary] = useState(null);
-  const [countTitle, setCountTitle] = useState('');
-  const [storeCode, setStoreCode] = useState('');
-  const [storeQuantity, setStoreQuantity] = useState('');
-  const [storeMessage, setStoreMessage] = useState('');
-  const [storeData, setStoreData] = useState([]);
-  const [finalReport, setFinalReport] = useState(null);
-  const reportRef = useRef(null);
+app.use(cors());
+app.use(express.json());
 
-  useEffect(() => {
-    const loadCount = async () => {
-      try {
-        const res = await fetch('/load-count', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ countId: parseInt(countId) }),
-        });
-        const data = await res.json();
-        if (data.message) {
-          setSystemSummary({
-            totalItems: data.systemData.length,
-            totalUnits: data.systemData.reduce((sum, item) => sum + (item.balance || 0), 0),
-          });
-          setCountTitle(data.countTitle);
-          setStoreData(data.storeData || []);
-        } else {
-          alert(data.error);
-          history.push('/past-counts?status=created');
-        }
-      } catch (error) {
-        console.error('Erro ao carregar contagem:', error);
-        alert('Erro ao carregar contagem.');
-        history.push('/past-counts?status=created');
-      }
-    };
-    loadCount();
-  }, [countId, history]);
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const DATA_DIR = path.join(__dirname, 'data');
 
-  const handleCountStore = async () => {
-    if (!storeCode.trim()) {
-      alert('Insira um código.');
-      return;
+[UPLOAD_DIR, DATA_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
+
+const DATA_FILE = path.join(DATA_DIR, 'inventory-data.json');
+const PAST_COUNTS_FILE = path.join(DATA_DIR, 'past-counts.json');
+
+let systemData = [];
+let storeData = [];
+let countTitle = '';
+
+function loadSavedData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      systemData = data.systemData || [];
+      storeData = data.storeData || [];
+      countTitle = data.countTitle || '';
     }
-    const qty = storeQuantity.trim() ? parseInt(storeQuantity, 10) : 1;
-    if (qty <= 0) {
-      alert('Quantidade inválida.');
-      return;
-    }
-    try {
-      const res = await fetch('/count-store', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: storeCode, quantity: qty }),
-      });
-      const data = await res.json();
-      if (data.message) {
-        setStoreMessage(data.message);
-        setStoreData(prev => [...prev, { code: storeCode, quantity: qty }]);
-        setStoreCode('');
-        setStoreQuantity('');
-        // Salvamento automático
-        await fetch('/save-count', { method: 'POST' });
-      } else {
-        alert(data.error);
-      }
-    } catch (error) {
-      console.error('Erro ao contar:', error);
-      alert('Erro ao contar.');
-    }
-  };
-
-  const handleFinalize = async () => {
-    try {
-      const res = await fetch('/report-detailed');
-      const data = await res.json();
-      if (data.summary) {
-        setFinalReport(data);
-      } else {
-        alert(data.error);
-      }
-    } catch (error) {
-      console.error('Erro ao finalizar contagem:', error);
-      alert('Erro ao finalizar contagem.');
-    }
-  };
-
-  const handlePrintReport = () => window.print();
-
-  const handleSaveReportAsText = () => {
-    if (!finalReport) return;
-    const reportText = `
-Relatório Detalhado - ${finalReport.title}
-Data: ${new Date(finalReport.timestamp).toLocaleString()}
-
-Resumo:
-- Total em Sobra: ${finalReport.summary.totalProductsInExcess}
-- Total Faltantes: ${finalReport.summary.totalProductsMissing}
-- Total Regulares: ${finalReport.summary.totalProductsRegular}
-
-Detalhes:
-${finalReport.details.length ? finalReport.details.map(item => `
-Código: ${item.Código}
-Produto: ${item.Produto}
-Saldo: ${item.Saldo_Estoque}
-Contado: ${item.Contado}
-Diferença: ${item.Diferença}`).join('\n') : 'Sem discrepâncias.'}
-    `.trim();
-    const blob = new Blob([reportText], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `relatorio-detalhado-${finalReport.title}-${new Date().toISOString().slice(0, 10)}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-  };
-
-  const handleCloseReport = () => {
-    setFinalReport(null);
-    history.push('/past-counts?status=finalized');
-  };
-
-  return (
-    <div className="App">
-      <header className="App-header">
-        <h1 className="app-title">AUDITÊ</h1>
-        <Link to="/past-counts?status=created" className="nav-link">Voltar</Link>
-      </header>
-      <main className="App-main">
-        <section className="card">
-          {!finalReport ? (
-            <>
-              <h2>Contagem Ativa: {countTitle}</h2>
-              {systemSummary ? (
-                <>
-                  <p>Total de Produtos: {systemSummary.totalItems}</p>
-                  <p>Total de Unidades: {systemSummary.totalUnits}</p>
-                  <div className="field">
-                    <input
-                      type="text"
-                      value={storeCode}
-                      onChange={(e) => setStoreCode(e.target.value)}
-                      placeholder="Código do Produto"
-                      className="text-input"
-                    />
-                    <input
-                      type="number"
-                      value={storeQuantity}
-                      onChange={(e) => setStoreQuantity(e.target.value)}
-                      placeholder="Quantidade (Opcional)"
-                      className="text-input"
-                      min="1"
-                    />
-                    <button onClick={handleCountStore} className="btn primary">
-                      Adicionar
-                    </button>
-                  </div>
-                  <p className="count-info">
-                    Último produto cadastrado: {storeMessage.split(' ')[1] || 'Nenhum'}. Total cadastrado: {storeData.length}
-                  </p>
-                  <div className="field">
-                    <button onClick={handleFinalize} className="btn primary">
-                      Finalizar
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <p>Carregando contagem...</p>
-              )}
-            </>
-          ) : (
-            <div className="report-final" ref={reportRef}>
-              <h3 className="no-print">Relatório Detalhado - {finalReport.title}</h3>
-              <h3 className="print-only">
-                Relatório Detalhado - {finalReport.title}
-                <br />Data: {new Date(finalReport.timestamp).toLocaleString()}
-              </h3>
-              <p>Total em Sobra: {finalReport.summary.totalProductsInExcess}</p>
-              <p>Total Faltantes: {finalReport.summary.totalProductsMissing}</p>
-              <p>Total Regulares: {finalReport.summary.totalProductsRegular}</p>
-              <h4>Detalhes</h4>
-              {finalReport.details.length > 0 ? (
-                <table className="report-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th>
-                      <th>Produto</th>
-                      <th>Saldo</th>
-                      <th>Contado</th>
-                      <th>Diferença</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {finalReport.details.map((item, index) => (
-                      <tr key={index}>
-                        <td>{item.Código}</td>
-                        <td>{item.Produto}</td>
-                        <td>{item.Saldo_Estoque}</td>
-                        <td>{item.Contado}</td>
-                        <td>{item.Diferença}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <p>Sem discrepâncias.</p>
-              )}
-              <div className="report-actions no-print">
-                <button onClick={handlePrintReport} className="btn primary">
-                  Imprimir
-                </button>
-                <button onClick={handleSaveReportAsText} className="btn secondary">
-                  Salvar como Texto
-                </button>
-                <button onClick={handleCloseReport} className="btn primary">
-                  Fechar
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-      </main>
-    </div>
-  );
+  } catch (error) {
+    console.error('Erro ao carregar dados salvos:', error);
+  }
 }
 
-export default ActiveCount;
+let pastCounts = [];
+function loadPastCounts() {
+  try {
+    if (fs.existsSync(PAST_COUNTS_FILE)) {
+      pastCounts = JSON.parse(fs.readFileSync(PAST_COUNTS_FILE, 'utf8')) || [];
+    }
+  } catch (error) {
+    console.error('Erro ao carregar contagens passadas:', error);
+  }
+}
+
+function saveData() {
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ systemData, storeData, countTitle }, null, 2));
+  } catch (error) {
+    console.error('Erro ao salvar dados:', error);
+  }
+}
+
+function savePastCounts() {
+  try {
+    fs.writeFileSync(PAST_COUNTS_FILE, JSON.stringify(pastCounts, null, 2));
+  } catch (error) {
+    console.error('Erro ao salvar contagens passadas:', error);
+  }
+}
+
+loadSavedData();
+loadPastCounts();
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  },
+});
+
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.includes('excel') || file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.xls')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Apenas arquivos Excel são permitidos'), false);
+    }
+  },
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+function normalizeColumnName(name) {
+  return name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+}
+
+function extractNumericCode(code) {
+  return code.toString().replace(/[^0-9]/g, '');
+}
+
+app.post('/create-count-from-excel', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+
+    const { title } = req.body;
+    const workbook = xlsx.readFile(req.file.path);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
+
+    if (rawData.length === 0) return res.status(400).json({ error: 'Planilha vazia' });
+
+    const headers = rawData[0].map(normalizeColumnName);
+    const codeCol = headers.indexOf('codigo');
+    const productCol = headers.indexOf('produto');
+    let balanceCol = headers.indexOf('saldo');
+    if (balanceCol === -1) balanceCol = headers.indexOf('saldo_estoque');
+
+    if (codeCol === -1 || productCol === -1 || balanceCol === -1) {
+      return res.status(400).json({
+        error: 'Formato de planilha inválido. Colunas esperadas: Código, Produto, Saldo (ou Saldo_Estoque)',
+      });
+    }
+
+    const systemData = rawData.slice(1).map(row => ({
+      code: extractNumericCode(row[codeCol]),
+      product: row[productCol] || '',
+      balance: parseFloat(row[balanceCol]) || 0,
+    })).filter(item => item.code && item.product);
+
+    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada' });
+
+    const newCount = {
+      title: title || `Contagem sem título - ${new Date().toISOString().slice(0, 10)}`,
+      timestamp: new Date().toISOString(),
+      type: 'pre-created',
+      systemData,
+      storeData: [],
+      summary: { totalProductsInExcess: 0, totalProductsMissing: 0, totalProductsRegular: 0 },
+      details: [],
+      status: 'created',
+    };
+
+    pastCounts.push(newCount);
+    savePastCounts();
+
+    fs.unlink(req.file.path, (err) => err && console.error('Erro ao excluir arquivo:', err));
+    res.status(200).json({
+      message: 'Contagem pré-criada com sucesso!',
+      countId: pastCounts.length - 1,
+      systemData,
+    });
+  } catch (error) {
+    console.error('Erro ao criar contagem:', error);
+    res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
+  }
+});
+
+app.post('/load-count', (req, res) => {
+  try {
+    const { countId } = req.body;
+    if (countId < 0 || countId >= pastCounts.length) return res.status(400).json({ error: 'ID inválido' });
+
+    const selectedCount = pastCounts[countId];
+    systemData = selectedCount.systemData || [];
+    storeData = selectedCount.storeData || [];
+    countTitle = selectedCount.title;
+
+    saveData();
+    res.status(200).json({ message: 'Contagem carregada!', systemData, storeData, countTitle });
+  } catch (error) {
+    console.error('Erro ao carregar contagem:', error);
+    res.status(500).json({ error: 'Erro ao carregar contagem: ' + error.message });
+  }
+});
+
+app.post('/upload-system-excel', upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+
+    const workbook = xlsx.readFile(req.file.path);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
+
+    if (rawData.length === 0) return res.status(400).json({ error: 'Planilha vazia' });
+
+    const headers = rawData[0].map(normalizeColumnName);
+    const codeCol = headers.indexOf('codigo');
+    const productCol = headers.indexOf('produto');
+    let balanceCol = headers.indexOf('saldo');
+    if (balanceCol === -1) balanceCol = headers.indexOf('saldo_estoque');
+
+    if (codeCol === -1 || productCol === -1 || balanceCol === -1) {
+      return res.status(400).json({
+        error: 'Formato inválido. Colunas: Código, Produto, Saldo (ou Saldo_Estoque)',
+      });
+    }
+
+    systemData = rawData.slice(1).map(row => ({
+      code: extractNumericCode(row[codeCol]),
+      product: row[productCol] || '',
+      balance: parseFloat(row[balanceCol]) || 0,
+    })).filter(item => item.code && item.product);
+
+    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada' });
+
+    saveData();
+    const totalItems = systemData.length;
+    const totalUnits = systemData.reduce((sum, item) => sum + item.balance, 0);
+
+    fs.unlink(req.file.path, (err) => err && console.error('Erro ao excluir arquivo:', err));
+    res.status(200).json({ message: 'Dados carregados!', summary: { totalItems, totalUnits } });
+  } catch (error) {
+    console.error('Erro ao processar planilha:', error);
+    res.status(500).json({ error: 'Erro ao processar planilha: ' + error.message });
+  }
+});
+
+app.post('/set-count-title', (req, res) => {
+  try {
+    const { title } = req.body;
+    if (!title || typeof title !== 'string') return res.status(400).json({ error: 'Título inválido' });
+    countTitle = title.trim();
+    saveData();
+    res.status(200).json({ message: `Título definido como "${countTitle}"` });
+  } catch (error) {
+    console.error('Erro ao definir título:', error);
+    res.status(500).json({ error: 'Erro ao definir título: ' + error.message });
+  }
+});
+
+app.post('/count-store', (req, res) => {
+  try {
+    const { code, quantity } = req.body;
+    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'Código inválido' });
+    const qty = parseInt(quantity, 10) || 1;
+    if (qty <= 0) return res.status(400).json({ error: 'Quantidade inválida' });
+
+    storeData.push({ code: extractNumericCode(code), quantity: qty });
+    saveData();
+
+    // Atualizar status para 'in-progress' se ainda não finalizada
+    const currentCountIndex = pastCounts.findIndex(c => c.title === countTitle && c.status !== 'finalized');
+    if (currentCountIndex !== -1) {
+      pastCounts[currentCountIndex].storeData = storeData;
+      pastCounts[currentCountIndex].status = 'created'; // Mantém como 'created' até finalizar
+      savePastCounts();
+    }
+
+    res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}` });
+  } catch (error) {
+    console.error('Erro ao adicionar código:', error);
+    res.status(500).json({ error: 'Erro ao adicionar código: ' + error.message });
+  }
+});
+
+app.post('/save-count', (req, res) => {
+  try {
+    if (storeData.length === 0) return res.status(400).json({ error: 'Nenhuma contagem para salvar' });
+    saveData();
+    res.status(200).json({ message: 'Contagem salva!' });
+  } catch (error) {
+    console.error('Erro ao salvar contagem:', error);
+    res.status(500).json({ error: 'Erro ao salvar contagem: ' + error.message });
+  }
+});
+
+function generateReport(filterDifferences = false) {
+  if (systemData.length === 0) throw new Error('Nenhum dado do sistema');
+
+  const storeCount = storeData.reduce((acc, entry) => {
+    acc[entry.code] = (acc[entry.code] || 0) + entry.quantity;
+    return acc;
+  }, {});
+
+  let productsInExcess = 0;
+  let productsMissing = 0;
+  let productsRegular = 0;
+
+  const reportDetails = systemData.map(item => {
+    const counted = storeCount[item.code] || 0;
+    const expected = item.balance;
+    const difference = counted - expected;
+
+    if (difference === 0) productsRegular++;
+    else if (difference > 0) productsInExcess += difference;
+    else if (difference < 0) productsMissing += Math.abs(difference);
+
+    return {
+      Código: item.code,
+      Produto: item.product,
+      Saldo_Estoque: expected,
+      Contado: counted,
+      Diferença: difference,
+    };
+  });
+
+  const unknownProducts = Object.keys(storeCount).filter(code => !systemData.some(item => item.code === code));
+  unknownProducts.forEach(code => {
+    const counted = storeCount[code];
+    productsInExcess += counted;
+    reportDetails.push({
+      Código: code,
+      Produto: 'Desconhecido',
+      Saldo_Estoque: 0,
+      Contado: counted,
+      Diferença: counted,
+    });
+  });
+
+  if (filterDifferences) {
+    reportDetails.filter(item => item.Diferença !== 0);
+  }
+
+  const report = {
+    title: countTitle || 'Contagem sem título',
+    timestamp: new Date().toISOString(),
+    type: filterDifferences ? 'synthetic' : 'detailed',
+    systemData,
+    storeData,
+    summary: { totalProductsInExcess, totalProductsMissing, totalProductsRegular },
+    details: reportDetails,
+    status: 'finalized',
+  };
+
+  const currentCountIndex = pastCounts.findIndex(c => c.title === countTitle && c.status !== 'finalized');
+  if (currentCountIndex !== -1) {
+    pastCounts[currentCountIndex] = report;
+  } else {
+    pastCounts.push(report);
+  }
+  savePastCounts();
+
+  return report;
+}
+
+app.get('/report-detailed', (req, res) => {
+  try {
+    // Carregar os dados da contagem atual a partir do arquivo
+    loadSavedData();
+    if (systemData.length === 0) {
+      return res.status(400).json({ error: 'Nenhum dado do sistema disponível para gerar o relatório' });
+    }
+    const report = generateReport(false);
+    res.status(200).json(report);
+  } catch (error) {
+    console.error('Erro ao gerar relatório detalhado:', error);
+    res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
+  }
+});
+
+app.get('/report-synthetic', (req, res) => {
+  try {
+    // Carregar os dados da contagem atual a partir do arquivo
+    loadSavedData();
+    if (systemData.length === 0) {
+      return res.status(400).json({ error: 'Nenhum dado do sistema disponível para gerar o relatório' });
+    }
+    const report = generateReport(true);
+    res.status(200).json(report);
+  } catch (error) {
+    console.error('Erro ao gerar relatório sintético:', error);
+    res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
+  }
+});
+
+app.get('/past-counts', (req, res) => {
+  try {
+    const { status } = req.query;
+    let filteredCounts = pastCounts;
+    if (status) {
+      filteredCounts = pastCounts.filter(c => c.status === status);
+    }
+    res.status(200).json(filteredCounts);
+  } catch (error) {
+    console.error('Erro ao listar contagens:', error);
+    res.status(500).json({ error: 'Erro ao listar contagens: ' + error.message });
+  }
+});
+
+app.post('/reset', (req, res) => {
+  try {
+    systemData = [];
+    storeData = [];
+    countTitle = '';
+    saveData();
+    res.status(200).json({ message: 'Dados reiniciados!' });
+  } catch (error) {
+    console.error('Erro ao reiniciar:', error);
+    res.status(500).json({ error: 'Erro ao reiniciar: ' + error.message });
+  }
+});
+
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', systemDataCount: systemData.length, storeDataCount: storeData.length });
+});
+
+if (process.env.NODE_ENV === 'production') {
+  const staticDir = path.join(__dirname, '../client/build');
+  app.use(express.static(staticDir));
+  app.get('*', (req, res) => {
+    const indexPath = path.join(staticDir, 'index.html');
+    if (fs.existsSync(indexPath)) res.sendFile(indexPath);
+    else res.status(500).json({ error: 'Frontend não construído' });
+  });
+}
+
+app.use((err, req, res, next) => {
+  console.error('Erro não tratado:', err);
+  res.status(500).json({ error: 'Erro interno' });
+});
+
+app.listen(port, () => console.log(`Servidor na porta ${port}`));
+
+process.on('SIGINT', () => { saveData(); savePastCounts(); process.exit(0); });
+process.on('SIGTERM', () => { saveData(); savePastCounts(); process.exit(0); });
