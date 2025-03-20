@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
 
 const ActiveCounts = () => {
   const [file, setFile] = useState(null);
@@ -87,119 +86,149 @@ const ActiveCounts = () => {
     }
   };
 
-  const handleReset = async () => {
-    try {
-      const response = await axios.post('/reset');
-      setMessage(response.data.message);
-      setFile(null);
-      setTitle('');
-      setCountId(null);
-      setSystemData([]);
-      setStoreData([]);
-      setCode('');
-      setQuantity(1);
-    } catch (error) {
-      setMessage('Erro ao reiniciar: ' + (error.response?.data?.error || error.message));
-    }
-  };
-
   return (
-    <div style={{ color: 'black', background: 'white', minHeight: '100vh', padding: '20px' }}>
-      <h1>Sistema de Auditoria Sante</h1>
-      <Link to="/past-counts">Ver Contagens Salvas</Link>
-      <h2>Criar Nova Contagem</h2>
-      <form onSubmit={handleCreateCount}>
-        <div>
-          <label>Título da Contagem:</label>
+    <>
+      <div className="card">
+        <h2>Criar Nova Contagem</h2>
+        <form onSubmit={handleCreateCount}>
+          <div className="field">
+            <label>Título da Contagem:</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Digite o título"
+              className="text-input"
+            />
+          </div>
+          <div className="field">
+            <label>Arquivo Excel:</label>
+            <input
+              type="file"
+              accept=".xlsx, .xls"
+              onChange={handleFileChange}
+              className="file-input"
+            />
+          </div>
+          <button type="submit" className="btn primary">Criar Contagem</button>
+        </form>
+      </div>
+
+      <div className="card">
+        <h2>Carregar Contagem</h2>
+        <div className="field">
+          <label>ID da Contagem:</label>
+          <input
+            type="number"
+            value={countId || ''}
+            onChange={(e) => setCountId(e.target.value)}
+            placeholder="Digite o ID"
+            className="text-input"
+          />
+          <button onClick={handleLoadCount} className="btn secondary">Carregar</button>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>Contagem da Loja</h2>
+        <div className="field">
+          <label>Código:</label>
           <input
             type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Digite o título"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Digite o código"
+            className="text-input"
           />
+          <label>Quantidade:</label>
+          <input
+            type="number"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            min="1"
+            className="text-input"
+          />
+          <button onClick={handleCountStore} className="btn primary">Adicionar</button>
         </div>
-        <div>
-          <label>Arquivo Excel:</label>
-          <input type="file" accept=".xlsx, .xls" onChange={handleFileChange} />
-        </div>
-        <button type="submit">Criar Contagem</button>
-      </form>
-
-      <h2>Carregar Contagem</h2>
-      <div>
-        <label>ID da Contagem:</label>
-        <input
-          type="number"
-          value={countId || ''}
-          onChange={(e) => setCountId(e.target.value)}
-          placeholder="Digite o ID"
-        />
-        <button onClick={handleLoadCount}>Carregar</button>
       </div>
 
-      <h2>Contagem da Loja</h2>
-      <div>
-        <label>Código:</label>
-        <input
-          type="text"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="Digite o código"
-        />
-        <label>Quantidade:</label>
-        <input
-          type="number"
-          value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
-          min="1"
-        />
-        <button onClick={handleCountStore}>Adicionar</button>
+      <div className="count-actions">
+        <button onClick={handleSaveCount} className="btn secondary">Salvar Contagem</button>
       </div>
 
-      <button onClick={handleSaveCount}>Salvar Contagem</button>
-      <button onClick={handleReset}>Reiniciar</button>
-
-      {message && <p style={{ color: message.includes('Erro') ? 'red' : 'green' }}>{message}</p>}
+      {message && (
+        <p className="count-info" style={{ color: message.includes('Erro') ? 'red' : '#34A853' }}>
+          {message}
+        </p>
+      )}
 
       {systemData.length > 0 && (
-        <div>
+        <div className="card">
           <h3>Dados do Sistema</h3>
-          <ul>
-            {systemData.map((item, index) => (
-              <li key={index}>
-                Código: {item.code}, Produto: {item.product}, Saldo: {item.balance}
-              </li>
-            ))}
-          </ul>
+          <table className="report-table">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Produto</th>
+                <th>Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {systemData.map((item, index) => (
+                <tr key={index}>
+                  <td>{item.code}</td>
+                  <td>{item.product}</td>
+                  <td>{item.balance}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
       {storeData.length > 0 && (
-        <div>
+        <div className="card">
           <h3>Dados da Loja</h3>
-          <ul>
-            {storeData.map((item, index) => (
-              <li key={index}>
-                Código: {item.code}, Quantidade: {item.quantity}
-              </li>
-            ))}
-          </ul>
+          <table className="report-table">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Quantidade</th>
+              </tr>
+            </thead>
+            <tbody>
+              {storeData.map((item, index) => (
+                <tr key={index}>
+                  <td>{item.code}</td>
+                  <td>{item.quantity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
       {countId && (
-        <div>
-          <h3>Relatórios</h3>
-          <a href={`/report-detailed?countId=${countId}`} target="_blank" rel="noopener noreferrer">
+        <div className="report-actions">
+          <a
+            href={`/report-detailed?countId=${countId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn primary"
+          >
             Relatório Detalhado
           </a>
-          <br />
-          <a href={`/report-synthetic?countId=${countId}`} target="_blank" rel="noopener noreferrer">
+          <a
+            href={`/report-synthetic?countId=${countId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn secondary"
+          >
             Relatório Sintético
           </a>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
