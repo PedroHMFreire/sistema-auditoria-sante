@@ -5,7 +5,7 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs').promises; // Usar a versão com promessas do fs
 const { Pool } = require('pg');
 
 app.use(cors());
@@ -36,13 +36,35 @@ async function initializeDatabase() {
     console.log('Tabela "counts" criada ou já existe.');
   } catch (error) {
     console.error('Erro ao inicializar o banco de dados:', error);
+    // Não encerrar o servidor, apenas logar o erro
   }
 }
 
 initializeDatabase();
 
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+// Criar o diretório de uploads e limpá-lo na inicialização
+async function initializeUploadDir() {
+  try {
+    // Verificar se o diretório existe, se não, criá-lo
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    console.log('Diretório de uploads criado:', UPLOAD_DIR);
+
+    // Limpar todos os arquivos no diretório de uploads
+    const files = await fs.readdir(UPLOAD_DIR);
+    for (const file of files) {
+      await fs.unlink(path.join(UPLOAD_DIR, file));
+      console.log(`Arquivo removido: ${file}`);
+    }
+    console.log('Diretório de uploads limpo.');
+  } catch (error) {
+    console.error('Erro ao inicializar/limpar o diretório de uploads:', error);
+    // Não encerrar o servidor, apenas logar o erro
+  }
+}
+
+initializeUploadDir();
 
 let systemData = [];
 let storeData = [];
@@ -150,7 +172,8 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
 
     const countId = result.rows[0].id;
 
-    fs.unlink(req.file.path, (err) => err && console.error('Erro ao excluir arquivo:', err));
+    // Remover o arquivo após o processamento
+    await fs.unlink(req.file.path).catch(err => console.error('Erro ao excluir arquivo:', err));
     res.status(200).json({
       message: 'Contagem pré-criada com sucesso!',
       countId,
@@ -165,13 +188,15 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
 app.post('/load-count', async (req, res) => {
   try {
     const { countId } = req.body;
+    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
+
     const result = await pool.query('SELECT * FROM counts WHERE id = $1', [countId]);
     if (result.rows.length === 0) return res.status(400).json({ error: 'ID inválido' });
 
     const selectedCount = result.rows[0];
     systemData = Array.isArray(selectedCount.system_data) ? selectedCount.system_data : [];
     storeData = Array.isArray(selectedCount.store_data) ? selectedCount.store_data : [];
-    countTitle = selectedCount.title;
+    countTitle = selectedCount.title || '';
 
     res.status(200).json({ message: 'Contagem carregada!', systemData, storeData, countTitle });
   } catch (error) {
@@ -217,7 +242,7 @@ app.post('/upload-system-excel', upload.single('file'), async (req, res) => {
     const totalItems = systemData.length;
     const totalUnits = systemData.reduce((sum, item) => sum + item.balance, 0);
 
-    fs.unlink(req.file.path, (err) => err && console.error('Erro ao excluir arquivo:', err));
+    await fs.unlink(req.file.path).catch(err => console.error('Erro ao excluir arquivo:', err));
     res.status(200).json({ message: 'Dados carregados!', summary: { totalItems, totalUnits } });
   } catch (error) {
     console.error('Erro ao processar planilha:', error);
@@ -282,7 +307,9 @@ app.post('/save-count', async (req, res) => {
 });
 
 function generateReport(systemData, storeData, countTitle, filterDifferences = false) {
-  if (!Array.isArray(systemData) || systemData.length === 0) throw new Error('Nenhum dado do sistema');
+  if (!Array.isArray(systemData) || systemData.length === 0) {
+    throw new Error('Nenhum dado do sistema');
+  }
 
   const storeCount = storeData.reduce((acc, entry) => {
     acc[entry.code] = (acc[entry.code] || 0) + entry.quantity;
@@ -295,7 +322,7 @@ function generateReport(systemData, storeData, countTitle, filterDifferences = f
 
   let reportDetails = systemData.map(item => {
     const counted = storeCount[item.code] || 0;
-    const expected = item.balance;
+    const expected = item.balance || 0;
     const difference = counted - expected;
 
     if (difference === 0) productsRegular++;
@@ -431,7 +458,6 @@ app.get('/past-counts', async (req, res) => {
 
     // Validar e processar os dados retornados
     const counts = result.rows.map(row => {
-      // Garantir que os campos JSONB sejam objetos válidos
       const systemData = Array.isArray(row.system_data) ? row.system_data : [];
       const storeData = Array.isArray(row.store_data) ? row.store_data : [];
       const summary = typeof row.summary === 'object' && row.summary !== null ? row.summary : {};
@@ -456,6 +482,18 @@ app.get('/past-counts', async (req, res) => {
   }
 });
 
+// Endpoint temporário para limpar o banco de dados
+app.post('/clear-database', async (req, res) => {
+  try {
+    await pool.query('TRUNCATE TABLE counts RESTART IDENTITY');
+    console.log('Banco de dados limpo com sucesso.');
+    res.status(200).json({ message: 'Banco de dados limpo com sucesso!' });
+  } catch (error) {
+    console.error('Erro ao limpar o banco de dados:', error);
+    res.status(500).json({ error: 'Erro ao limpar o banco de dados: ' + error.message });
+  }
+});
+
 app.post('/reset', async (req, res) => {
   try {
     systemData = [];
@@ -469,22 +507,35 @@ app.post('/reset', async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', systemDataCount: systemData.length, storeDataCount: storeData.length });
+  try {
+    res.status(200).json({ status: 'ok', systemDataCount: systemData.length, storeDataCount: storeData.length });
+  } catch (error) {
+    console.error('Erro no endpoint /health:', error);
+    res.status(500).json({ error: 'Erro no endpoint de saúde' });
+  }
 });
 
 if (process.env.NODE_ENV === 'production') {
   const staticDir = path.join(__dirname, '../client/build');
   app.use(express.static(staticDir));
   app.get('*', (req, res) => {
-    const indexPath = path.join(staticDir, 'index.html');
-    if (fs.existsSync(indexPath)) res.sendFile(indexPath);
-    else res.status(500).json({ error: 'Frontend não construído' });
+    try {
+      const indexPath = path.join(staticDir, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(500).json({ error: 'Frontend não construído' });
+      }
+    } catch (error) {
+      console.error('Erro ao servir o frontend:', error);
+      res.status(500).json({ error: 'Erro ao servir o frontend' });
+    }
   });
 }
 
 app.use((err, req, res, next) => {
   console.error('Erro não tratado:', err);
-  res.status(500).json({ error: 'Erro interno' });
+  res.status(500).json({ error: 'Erro interno: ' + err.message });
 });
 
 app.listen(port, () => console.log(`Servidor na porta ${port}`));
