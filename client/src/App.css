@@ -93,7 +93,6 @@ nav {
   gap: 15px;
   flex-wrap: wrap;
   margin-bottom: 15px;
-  justify-content: center;
 }
 
 .file-input,
@@ -149,22 +148,18 @@ nav {
   font-size: 0.9em;
   color: #FFFFFF;
   margin-top: 10px;
-  text-align: center;
 }
 
 .count-categories {
   display: flex;
   gap: 15px;
   flex-wrap: wrap;
-  justify-content: center;
 }
 
 .count-actions {
   display: flex;
   gap: 10px;
   margin-top: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
 }
 
 .report-final {
@@ -228,8 +223,6 @@ nav {
   margin-top: 20px;
   display: flex;
   gap: 15px;
-  flex-wrap: wrap;
-  justify-content: center;
 }
 
 @media print {
@@ -284,8 +277,6 @@ nav {
   }
   .btn {
     width: 100%;
-    max-width: 200px;
-    margin: 0 auto;
   }
   .count-categories {
     flex-direction: column;
@@ -300,10 +291,5 @@ nav {
   }
   .count-actions .btn {
     width: 100%;
-    max-width: 200px;
-  }
-  .report-actions .btn {
-    width: 100%;
-    max-width: 200px;
   }
 }
