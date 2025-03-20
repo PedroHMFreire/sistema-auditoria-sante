@@ -1,204 +1,144 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
+import { useParams, useHistory, Link } from 'react-router-dom';
+import './App.css';
 
-const ActiveCounts = () => {
-  const [file, setFile] = useState(null);
-  const [title, setTitle] = useState('');
-  const [message, setMessage] = useState('');
-  const [countId, setCountId] = useState(null);
-  const [systemData, setSystemData] = useState([]);
+function ActiveCount() {
+  const { countId } = useParams();
+  const history = useHistory();
+  const [systemSummary, setSystemSummary] = useState(null);
+  const [countTitle, setCountTitle] = useState('');
+  const [storeCode, setStoreCode] = useState('');
+  const [storeQuantity, setStoreQuantity] = useState('');
+  const [storeMessage, setStoreMessage] = useState('');
   const [storeData, setStoreData] = useState([]);
-  const [code, setCode] = useState('');
-  const [quantity, setQuantity] = useState(1);
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-  };
-
-  const handleCreateCount = async (e) => {
-    e.preventDefault();
-    if (!file) {
-      setMessage('Por favor, selecione um arquivo.');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('title', title);
-
-    try {
-      const response = await axios.post('/create-count-from-excel', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      setMessage(response.data.message);
-      setCountId(response.data.countId);
-      setSystemData(response.data.systemData);
-    } catch (error) {
-      setMessage('Erro ao criar contagem: ' + (error.response?.data?.error || error.message));
-    }
-  };
-
-  const handleLoadCount = async () => {
-    if (!countId) {
-      setMessage('Por favor, crie ou informe um ID de contagem.');
-      return;
-    }
-
-    try {
-      const response = await axios.post('/load-count', { countId });
-      setMessage(response.data.message);
-      setSystemData(response.data.systemData);
-      setStoreData(response.data.storeData);
-      setTitle(response.data.countTitle);
-    } catch (error) {
-      setMessage('Erro ao carregar contagem: ' + (error.response?.data?.error || error.message));
-    }
-  };
+  useEffect(() => {
+    const loadCount = async () => {
+      try {
+        const res = await fetch('/load-count', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ countId: parseInt(countId) }),
+        });
+        const data = await res.json();
+        if (data.message) {
+          setSystemSummary({
+            totalItems: data.systemData.length,
+            totalUnits: data.systemData.reduce((sum, item) => sum + (item.balance || 0), 0),
+          });
+          setCountTitle(data.countTitle);
+          setStoreData(data.storeData || []);
+        } else {
+          alert(data.error);
+          history.push('/past-counts?status=created');
+        }
+      } catch (error) {
+        console.error('Erro ao carregar contagem:', error);
+        alert('Erro ao carregar contagem.');
+        history.push('/past-counts?status=created');
+      }
+    };
+    loadCount();
+  }, [countId, history]);
 
   const handleCountStore = async () => {
-    if (!code || !countId) {
-      setMessage('Por favor, informe um código e um ID de contagem.');
+    if (!storeCode.trim()) {
+      alert('Insira um código.');
       return;
     }
-
+    const qty = storeQuantity.trim() ? parseInt(storeQuantity, 10) : 1;
+    if (qty <= 0) {
+      alert('Quantidade inválida.');
+      return;
+    }
     try {
-      const response = await axios.post('/count-store', { code, quantity, countId });
-      setMessage(response.data.message);
-      setStoreData([...storeData, { code, quantity }]);
-      setCode('');
-      setQuantity(1);
+      const res = await fetch('/count-store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: storeCode, quantity: qty }),
+      });
+      const data = await res.json();
+      if (data.message) {
+        setStoreMessage(data.message);
+        setStoreData(prev => [...prev, { code: storeCode, quantity: qty }]);
+        setStoreCode('');
+        setStoreQuantity('');
+        // Salvamento automático
+        await fetch('/save-count', { method: 'POST' });
+      } else {
+        alert(data.error);
+      }
     } catch (error) {
-      setMessage('Erro ao adicionar código: ' + (error.response?.data?.error || error.message));
+      console.error('Erro ao contar:', error);
+      alert('Erro ao contar.');
     }
   };
 
-  const handleSaveCount = async () => {
-    if (!countId) {
-      setMessage('Por favor, informe um ID de contagem.');
-      return;
-    }
-
+  const handleFinalize = async () => {
     try {
-      const response = await axios.post('/save-count', { countId });
-      setMessage(response.data.message);
+      const res = await fetch('/report-detailed');
+      const data = await res.json();
+      if (data.summary) {
+        alert('Contagem finalizada com sucesso!');
+        history.push('/past-counts?status=finalized');
+      } else {
+        alert(data.error);
+      }
     } catch (error) {
-      setMessage('Erro ao salvar contagem: ' + (error.response?.data?.error || error.message));
-    }
-  };
-
-  const handleReset = async () => {
-    try {
-      const response = await axios.post('/reset');
-      setMessage(response.data.message);
-      setFile(null);
-      setTitle('');
-      setCountId(null);
-      setSystemData([]);
-      setStoreData([]);
-      setCode('');
-      setQuantity(1);
-    } catch (error) {
-      setMessage('Erro ao reiniciar: ' + (error.response?.data?.error || error.message));
+      console.error('Erro ao finalizar contagem:', error);
+      alert('Erro ao finalizar contagem.');
     }
   };
 
   return (
-    <div style={{ color: 'black', background: 'white', minHeight: '100vh', padding: '20px' }}>
-      <h1>Sistema de Auditoria Sante</h1>
-      <h2>Criar Nova Contagem</h2>
-      <form onSubmit={handleCreateCount}>
-        <div>
-          <label>Título da Contagem:</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Digite o título"
-          />
-        </div>
-        <div>
-          <label>Arquivo Excel:</label>
-          <input type="file" accept=".xlsx, .xls" onChange={handleFileChange} />
-        </div>
-        <button type="submit">Criar Contagem</button>
-      </form>
-
-      <h2>Carregar Contagem</h2>
-      <div>
-        <label>ID da Contagem:</label>
-        <input
-          type="number"
-          value={countId || ''}
-          onChange={(e) => setCountId(e.target.value)}
-          placeholder="Digite o ID"
-        />
-        <button onClick={handleLoadCount}>Carregar</button>
-      </div>
-
-      <h2>Contagem da Loja</h2>
-      <div>
-        <label>Código:</label>
-        <input
-          type="text"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          placeholder="Digite o código"
-        />
-        <label>Quantidade:</label>
-        <input
-          type="number"
-          value={quantity}
-          onChange={(e) => setQuantity(e.target.value)}
-          min="1"
-        />
-        <button onClick={handleCountStore}>Adicionar</button>
-      </div>
-
-      <button onClick={handleSaveCount}>Salvar Contagem</button>
-      <button onClick={handleReset}>Reiniciar</button>
-
-      {message && <p style={{ color: message.includes('Erro') ? 'red' : 'green' }}>{message}</p>}
-
-      {systemData.length > 0 && (
-        <div>
-          <h3>Dados do Sistema</h3>
-          <ul>
-            {systemData.map((item, index) => (
-              <li key={index}>
-                Código: {item.code}, Produto: {item.product}, Saldo: {item.balance}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {storeData.length > 0 && (
-        <div>
-          <h3>Dados da Loja</h3>
-          <ul>
-            {storeData.map((item, index) => (
-              <li key={index}>
-                Código: {item.code}, Quantidade: {item.quantity}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {countId && (
-        <div>
-          <h3>Relatórios</h3>
-          <a href={`/report-detailed?countId=${countId}`} target="_blank" rel="noopener noreferrer">
-            Relatório Detalhado
-          </a>
-          <br />
-          <a href={`/report-synthetic?countId=${countId}`} target="_blank" rel="noopener noreferrer">
-            Relatório Sintético
-          </a>
-        </div>
-      )}
+    <div className="App">
+      <header className="App-header">
+        <h1 className="app-title">AUDITÊ</h1>
+        <Link to="/past-counts?status=created" className="nav-link">Voltar</Link>
+      </header>
+      <main className="App-main">
+        <section className="card">
+          <h2>Contagem Ativa: {countTitle}</h2>
+          {systemSummary ? (
+            <>
+              <p>Total de Produtos: {systemSummary.totalItems}</p>
+              <p>Total de Unidades: {systemSummary.totalUnits}</p>
+              <div className="field">
+                <input
+                  type="text"
+                  value={storeCode}
+                  onChange={(e) => setStoreCode(e.target.value)}
+                  placeholder="Código do Produto"
+                  className="text-input"
+                />
+                <input
+                  type="number"
+                  value={storeQuantity}
+                  onChange={(e) => setStoreQuantity(e.target.value)}
+                  placeholder="Quantidade (Opcional)"
+                  className="text-input"
+                  min="1"
+                />
+                <button onClick={handleCountStore} className="btn primary">
+                  Adicionar
+                </button>
+              </div>
+              <p className="count-info">
+                Último produto cadastrado: {storeMessage.split(' ')[1] || 'Nenhum'}. Total cadastrado: {storeData.length}
+              </p>
+              <div className="field">
+                <button onClick={handleFinalize} className="btn primary">
+                  Finalizar
+                </button>
+              </div>
+            </>
+          ) : (
+            <p>Carregando contagem...</p>
+          )}
+        </section>
+      </main>
     </div>
   );
-};
+}
 
-export default ActiveCounts;
+export default ActiveCount;
