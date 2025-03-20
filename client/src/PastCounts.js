@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
 
 const PastCounts = () => {
   const [counts, setCounts] = useState([]);
@@ -30,33 +29,33 @@ const PastCounts = () => {
   }, []);
 
   if (loading) {
-    return <div style={{ color: 'black', background: 'white', minHeight: '100vh' }}>Carregando...</div>;
+    return <div className="card">Carregando...</div>;
   }
 
   if (error) {
-    return <div style={{ color: 'red', background: 'white', minHeight: '100vh' }}>{error}</div>;
+    return <div className="card" style={{ color: 'red' }}>{error}</div>;
   }
 
   return (
-    <div style={{ color: 'black', background: 'white', minHeight: '100vh' }}>
-      <h1>Contagens Salvas</h1>
-      <Link to="/">Voltar para a página inicial</Link>
+    <div className="card">
       {counts.length === 0 ? (
         <p>Nenhuma contagem encontrada.</p>
       ) : (
-        <ul>
+        <ul className="past-counts-list">
           {counts.map((count) => {
             try {
               console.log('Renderizando contagem:', count);
               const timestamp = count.timestamp ? new Date(count.timestamp).toLocaleString() : 'Data inválida';
               return (
-                <li key={count.id}>
-                  {count.title || 'Sem título'} - {timestamp} - Status: {count.status || 'Desconhecido'}
+                <li key={count.id} className="past-count-item">
+                  <h3>{count.title || 'Sem título'}</h3>
+                  <p>Data: {timestamp}</p>
+                  <p>Status: {count.status || 'Desconhecido'}</p>
                 </li>
               );
             } catch (err) {
               console.error('Erro ao renderizar contagem:', err, count);
-              return <li key={count.id}>Erro ao exibir contagem (ID: {count.id})</li>;
+              return <li key={count.id} className="past-count-item">Erro ao exibir contagem (ID: {count.id})</li>;
             }
           })}
         </ul>
