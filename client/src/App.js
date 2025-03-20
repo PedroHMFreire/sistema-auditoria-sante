@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import PastCounts from './PastCounts';
-import ActiveCounts from './ActiveCounts'; // Verifique se o nome está correto
+import ActiveCounts from './ActiveCounts';
 import './App.css';
 
 function App() {
