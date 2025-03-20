@@ -437,6 +437,8 @@ app.get('/past-counts', async (req, res) => {
       const summary = typeof row.summary === 'object' && row.summary !== null ? row.summary : {};
       const details = Array.isArray(row.details) ? row.details : [];
 
+      console.log(`Detalhes de system_data para contagem ${row.id}:`, systemData);
+
       return {
         ...row,
         system_data: systemData,
