@@ -5,7 +5,7 @@ Este é um sistema para auditoria de estoque, permitindo criar contagens, carreg
 ## Estrutura do Projeto
 
 - **`/client/`**: Frontend (React)
-  - `src/ActiveCounts.js`: Página inicial para criar e gerenciar contagens.
+  - `src/ActiveCount.js`: Página inicial para criar e gerenciar contagens. <!-- Corrigido: ActiveCounts.js -> ActiveCount.js -->
   - `src/PastCounts.js`: Página para visualizar contagens salvas.
   - `src/App.css`: Estilos do sistema (tema laranja e preto, fontes personalizadas).
 - **`/server/`**: Backend (Node.js/Express)
