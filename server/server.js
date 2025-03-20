@@ -169,8 +169,8 @@ app.post('/load-count', async (req, res) => {
     if (result.rows.length === 0) return res.status(400).json({ error: 'ID inválido' });
 
     const selectedCount = result.rows[0];
-    systemData = selectedCount.system_data || [];
-    storeData = selectedCount.store_data || [];
+    systemData = Array.isArray(selectedCount.system_data) ? selectedCount.system_data : [];
+    storeData = Array.isArray(selectedCount.store_data) ? selectedCount.store_data : [];
     countTitle = selectedCount.title;
 
     res.status(200).json({ message: 'Contagem carregada!', systemData, storeData, countTitle });
@@ -248,7 +248,7 @@ app.post('/count-store', async (req, res) => {
     const result = await pool.query('SELECT store_data FROM counts WHERE id = $1', [countId]);
     if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
 
-    storeData = result.rows[0].store_data || [];
+    storeData = Array.isArray(result.rows[0].store_data) ? result.rows[0].store_data : [];
     storeData.push({ code: extractNumericCode(code), quantity: qty });
 
     await pool.query(
@@ -271,7 +271,7 @@ app.post('/save-count', async (req, res) => {
     const result = await pool.query('SELECT store_data FROM counts WHERE id = $1', [countId]);
     if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
 
-    storeData = result.rows[0].store_data || [];
+    storeData = Array.isArray(result.rows[0].store_data) ? result.rows[0].store_data : [];
     if (storeData.length === 0) return res.status(400).json({ error: 'Nenhuma contagem para salvar' });
 
     res.status(200).json({ message: 'Contagem salva!' });
@@ -282,7 +282,7 @@ app.post('/save-count', async (req, res) => {
 });
 
 function generateReport(systemData, storeData, countTitle, filterDifferences = false) {
-  if (systemData.length === 0) throw new Error('Nenhum dado do sistema');
+  if (!Array.isArray(systemData) || systemData.length === 0) throw new Error('Nenhum dado do sistema');
 
   const storeCount = storeData.reduce((acc, entry) => {
     acc[entry.code] = (acc[entry.code] || 0) + entry.quantity;
@@ -353,11 +353,14 @@ app.get('/report-detailed', async (req, res) => {
     if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
 
     const count = result.rows[0];
-    if (count.system_data.length === 0) {
+    const systemData = Array.isArray(count.system_data) ? count.system_data : [];
+    const storeData = Array.isArray(count.store_data) ? count.store_data : [];
+
+    if (systemData.length === 0) {
       return res.status(400).json({ error: 'Nenhum dado do sistema disponível para gerar o relatório' });
     }
 
-    const report = generateReport(count.system_data, count.store_data, count.title, false);
+    const report = generateReport(systemData, storeData, count.title, false);
     await pool.query(
       'UPDATE counts SET system_data = $1, store_data = $2, summary = $3, details = $4, status = $5 WHERE id = $6',
       [
@@ -386,11 +389,14 @@ app.get('/report-synthetic', async (req, res) => {
     if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
 
     const count = result.rows[0];
-    if (count.system_data.length === 0) {
+    const systemData = Array.isArray(count.system_data) ? count.system_data : [];
+    const storeData = Array.isArray(count.store_data) ? count.store_data : [];
+
+    if (systemData.length === 0) {
       return res.status(400).json({ error: 'Nenhum dado do sistema disponível para gerar o relatório' });
     }
 
-    const report = generateReport(count.system_data, count.store_data, count.title, true);
+    const report = generateReport(systemData, storeData, count.title, true);
     await pool.query(
       'UPDATE counts SET system_data = $1, store_data = $2, summary = $3, details = $4, status = $5 WHERE id = $6',
       [
@@ -421,17 +427,26 @@ app.get('/past-counts', async (req, res) => {
     }
     console.log('Executando query:', query, 'com parâmetros:', params);
     const result = await pool.query(query, params);
-    console.log('Resultado da query:', result.rows);
+    console.log('Resultado bruto da query:', result.rows);
 
-    // Converter campos JSONB de string para objeto
-    const counts = result.rows.map(row => ({
-      ...row,
-      system_data: row.system_data ? JSON.parse(row.system_data) : [],
-      store_data: row.store_data ? JSON.parse(row.store_data) : [],
-      summary: row.summary ? JSON.parse(row.summary) : {},
-      details: row.details ? JSON.parse(row.details) : [],
-    }));
+    // Validar e processar os dados retornados
+    const counts = result.rows.map(row => {
+      // Garantir que os campos JSONB sejam objetos válidos
+      const systemData = Array.isArray(row.system_data) ? row.system_data : [];
+      const storeData = Array.isArray(row.store_data) ? row.store_data : [];
+      const summary = typeof row.summary === 'object' && row.summary !== null ? row.summary : {};
+      const details = Array.isArray(row.details) ? row.details : [];
 
+      return {
+        ...row,
+        system_data: systemData,
+        store_data: storeData,
+        summary: summary,
+        details: details,
+      };
+    });
+
+    console.log('Dados processados enviados para o frontend:', counts);
     res.status(200).json(counts);
   } catch (error) {
     console.error('Erro ao listar contagens:', error);
