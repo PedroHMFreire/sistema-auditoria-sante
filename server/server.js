@@ -32,7 +32,7 @@ async function initializeUploadDir() {
 initializeUploadDir();
 
 // Armazenamento em memória
-let counts = []; // Array para armazenar as contagens
+let counts = [];
 let systemData = [];
 let storeData = [];
 let countTitle = '';
@@ -111,7 +111,7 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
     if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada. Verifique se as colunas Código e Produto estão preenchidas.' });
 
     const newCount = {
-      id: counts.length + 1, // Simular um ID incremental
+      id: counts.length + 1,
       title: title || `Contagem sem título - ${new Date().toISOString().slice(0, 10)}`,
       timestamp: new Date().toISOString(),
       type: 'pre-created',
@@ -396,7 +396,7 @@ app.post('/reset', async (req, res) => {
     systemData = [];
     storeData = [];
     countTitle = '';
-    counts = []; // Limpar todas as contagens
+    counts = [];
     res.status(200).json({ message: 'Dados reiniciados!' });
   } catch (error) {
     console.error('Erro ao reiniciar:', error);
