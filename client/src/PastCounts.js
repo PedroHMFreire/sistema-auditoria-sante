@@ -31,7 +31,7 @@ function PastCounts() {
       const data = await res.json();
       if (data.message) {
         alert(data.message);
-        history.push(`/count/${countId}`); // Redireciona para a página da contagem
+        history.push(`/count/${countId}`);
       } else {
         alert(data.error);
       }
@@ -43,17 +43,16 @@ function PastCounts() {
 
   const getSectionTitle = () => {
     switch (status) {
-      case 'created': return 'CONTAGENS CRIADAS';
-      case 'in-progress': return 'CONTAGENS EM ANDAMENTO';
-      case 'finalized': return 'CONTAGENS FINALIZADAS';
-      default: return 'TODAS AS CONTAGENS';
+      case 'created': return 'Contagens Salvas';
+      case 'finalized': return 'Contagens Finalizadas';
+      default: return 'Todas as Contagens';
     }
   };
 
   return (
     <div className="App">
       <header className="App-header">
-        <h1 className="app-title">Auditê</h1>
+        <h1 className="app-title">AUDITÊ</h1>
         <Link to="/" className="nav-link">Voltar</Link>
       </header>
       <main className="App-main">
@@ -67,7 +66,7 @@ function PastCounts() {
                 <li key={index} className="past-count-item">
                   <h3>
                     {count.title} - {new Date(count.timestamp).toLocaleString()}
-                    {count.status === 'created' && <span style={{ color: '#ff6200' }}>(Pré-criada)</span>}
+                    {count.status === 'created' && <span style={{ color: '#FF6200' }}>(Pré-criada)</span>}
                   </h3>
                   <p>Total de Produtos: {count.systemData.length}</p>
                   <p>Total de Unidades: {count.systemData.reduce((sum, item) => sum + (item.balance || 0), 0)}</p>
