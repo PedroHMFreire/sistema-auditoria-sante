@@ -1,19 +1,15 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Home from './Home';
 import PastCounts from './PastCounts';
-import ActiveCounts from './ActiveCounts';
-import './App.css';
 
 function App() {
   return (
     <Router>
-      <div className="App">
-        <Routes>
-          <Route path="/past-counts" element={<PastCounts />} />
-          <Route path="/active-counts" element={ActiveCounts ? <ActiveCounts /> : <div>Componente ActiveCounts não encontrado</div>} />
-          <Route path="/" element={<PastCounts />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/past-counts" element={<PastCounts />} />
+      </Routes>
     </Router>
   );
 }
