@@ -273,7 +273,7 @@ function generateReport(filterDifferences = false) {
   let productsMissing = 0;
   let productsRegular = 0;
 
-  const reportDetails = systemData.map(item => {
+  let reportDetails = systemData.map(item => {
     const counted = storeCount[item.code] || 0;
     const expected = item.balance;
     const difference = counted - expected;
@@ -304,8 +304,9 @@ function generateReport(filterDifferences = false) {
     });
   });
 
+  // Corrigir a lógica de filtragem: atribuir o resultado de volta ao reportDetails
   if (filterDifferences) {
-    reportDetails.filter(item => item.Diferença !== 0);
+    reportDetails = reportDetails.filter(item => item.Diferença !== 0);
   }
 
   const report = {
@@ -314,7 +315,11 @@ function generateReport(filterDifferences = false) {
     type: filterDifferences ? 'synthetic' : 'detailed',
     systemData,
     storeData,
-    summary: { totalProductsInExcess, totalProductsMissing, totalProductsRegular },
+    summary: {
+      totalProductsInExcess: productsInExcess,
+      totalProductsMissing: productsMissing,
+      totalProductsRegular: productsRegular,
+    },
     details: reportDetails,
     status: 'finalized',
   };
