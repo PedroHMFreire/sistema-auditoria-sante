@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Link } from 'react-router-dom'; // Importação do react-router-dom
 
 const PastCounts = () => {
   const [counts, setCounts] = useState([]);
@@ -39,6 +40,7 @@ const PastCounts = () => {
   return (
     <div style={{ color: 'black', background: 'white', minHeight: '100vh' }}>
       <h1>Contagens Salvas</h1>
+      <Link to="/">Voltar para a página inicial</Link>
       {counts.length === 0 ? (
         <p>Nenhuma contagem encontrada.</p>
       ) : (
