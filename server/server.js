@@ -1,71 +1,52 @@
 const express = require('express');
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 const multer = require('multer');
 const xlsx = require('xlsx');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const { Pool } = require('pg');
 
 app.use(cors());
 app.use(express.json());
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
-const DATA_DIR = path.join(__dirname, 'data');
-
-[UPLOAD_DIR, DATA_DIR].forEach(dir => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+// Configuração do PostgreSQL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
-const DATA_FILE = path.join(DATA_DIR, 'inventory-data.json');
-const PAST_COUNTS_FILE = path.join(DATA_DIR, 'past-counts.json');
+// Inicializar o banco de dados
+async function initializeDatabase() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS counts (
+        id SERIAL PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        timestamp TIMESTAMP NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        system_data JSONB NOT NULL,
+        store_data JSONB NOT NULL,
+        summary JSONB NOT NULL,
+        details JSONB NOT NULL,
+        status VARCHAR(50) NOT NULL
+      );
+    `);
+    console.log('Tabela "counts" criada ou já existe.');
+  } catch (error) {
+    console.error('Erro ao inicializar o banco de dados:', error);
+  }
+}
+
+initializeDatabase();
+
+const UPLOAD_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 let systemData = [];
 let storeData = [];
 let countTitle = '';
-
-function loadSavedData() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-      systemData = data.systemData || [];
-      storeData = data.storeData || [];
-      countTitle = data.countTitle || '';
-    }
-  } catch (error) {
-    console.error('Erro ao carregar dados salvos:', error);
-  }
-}
-
-let pastCounts = [];
-function loadPastCounts() {
-  try {
-    if (fs.existsSync(PAST_COUNTS_FILE)) {
-      pastCounts = JSON.parse(fs.readFileSync(PAST_COUNTS_FILE, 'utf8')) || [];
-    }
-  } catch (error) {
-    console.error('Erro ao carregar contagens passadas:', error);
-  }
-}
-
-function saveData() {
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify({ systemData, storeData, countTitle }, null, 2));
-  } catch (error) {
-    console.error('Erro ao salvar dados:', error);
-  }
-}
-
-function savePastCounts() {
-  try {
-    fs.writeFileSync(PAST_COUNTS_FILE, JSON.stringify(pastCounts, null, 2));
-  } catch (error) {
-    console.error('Erro ao salvar contagens passadas:', error);
-  }
-}
-
-loadSavedData();
-loadPastCounts();
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
@@ -92,14 +73,13 @@ function normalizeColumnName(name) {
 }
 
 function extractNumericCode(code) {
-  // Verificar se o código é undefined, null, vazio ou não é um valor que pode ser convertido para string
   if (code == null || code === '' || (typeof code !== 'string' && typeof code !== 'number')) {
     return '';
   }
   return code.toString().replace(/[^0-9]/g, '');
 }
 
-app.post('/create-count-from-excel', upload.single('file'), (req, res) => {
+app.post('/create-count-from-excel', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 
@@ -110,7 +90,6 @@ app.post('/create-count-from-excel', upload.single('file'), (req, res) => {
 
     if (rawData.length === 0) return res.status(400).json({ error: 'Planilha vazia' });
 
-    // Log para depuração
     console.log('Dados brutos do Excel:', rawData);
 
     const headers = rawData[0].map(normalizeColumnName);
@@ -130,20 +109,14 @@ app.post('/create-count-from-excel', upload.single('file'), (req, res) => {
       const product = row[productCol] ? String(row[productCol]).trim() : '';
       const balance = parseFloat(row[balanceCol]) || 0;
 
-      // Log para depuração
       console.log(`Linha ${index + 2}: Código=${code}, Produto=${product}, Saldo=${balance}`);
 
-      // Ignorar linhas onde o código ou produto é vazio
       if (!code || !product) {
         console.log(`Linha ${index + 2} ignorada: Código ou Produto vazio`);
         return null;
       }
 
-      return {
-        code,
-        product,
-        balance,
-      };
+      return { code, product, balance };
     }).filter(item => item !== null);
 
     if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada. Verifique se as colunas Código e Produto estão preenchidas.' });
@@ -159,13 +132,28 @@ app.post('/create-count-from-excel', upload.single('file'), (req, res) => {
       status: 'created',
     };
 
-    pastCounts.push(newCount);
-    savePastCounts();
+    const result = await pool.query(
+      `INSERT INTO counts (title, timestamp, type, system_data, store_data, summary, details, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [
+        newCount.title,
+        newCount.timestamp,
+        newCount.type,
+        JSON.stringify(newCount.systemData),
+        JSON.stringify(newCount.storeData),
+        JSON.stringify(newCount.summary),
+        JSON.stringify(newCount.details),
+        newCount.status,
+      ]
+    );
+
+    const countId = result.rows[0].id;
 
     fs.unlink(req.file.path, (err) => err && console.error('Erro ao excluir arquivo:', err));
     res.status(200).json({
       message: 'Contagem pré-criada com sucesso!',
-      countId: pastCounts.length - 1,
+      countId,
       systemData,
     });
   } catch (error) {
@@ -174,17 +162,17 @@ app.post('/create-count-from-excel', upload.single('file'), (req, res) => {
   }
 });
 
-app.post('/load-count', (req, res) => {
+app.post('/load-count', async (req, res) => {
   try {
     const { countId } = req.body;
-    if (countId < 0 || countId >= pastCounts.length) return res.status(400).json({ error: 'ID inválido' });
+    const result = await pool.query('SELECT * FROM counts WHERE id = $1', [countId]);
+    if (result.rows.length === 0) return res.status(400).json({ error: 'ID inválido' });
 
-    const selectedCount = pastCounts[countId];
-    systemData = selectedCount.systemData || [];
-    storeData = selectedCount.storeData || [];
+    const selectedCount = result.rows[0];
+    systemData = selectedCount.system_data || [];
+    storeData = selectedCount.store_data || [];
     countTitle = selectedCount.title;
 
-    saveData();
     res.status(200).json({ message: 'Contagem carregada!', systemData, storeData, countTitle });
   } catch (error) {
     console.error('Erro ao carregar contagem:', error);
@@ -192,7 +180,7 @@ app.post('/load-count', (req, res) => {
   }
 });
 
-app.post('/upload-system-excel', upload.single('file'), (req, res) => {
+app.post('/upload-system-excel', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 
@@ -221,16 +209,11 @@ app.post('/upload-system-excel', upload.single('file'), (req, res) => {
 
       if (!code || !product) return null;
 
-      return {
-        code,
-        product,
-        balance,
-      };
+      return { code, product, balance };
     }).filter(item => item !== null);
 
     if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada. Verifique se as colunas Código e Produto estão preenchidas.' });
 
-    saveData();
     const totalItems = systemData.length;
     const totalUnits = systemData.reduce((sum, item) => sum + item.balance, 0);
 
@@ -242,12 +225,11 @@ app.post('/upload-system-excel', upload.single('file'), (req, res) => {
   }
 });
 
-app.post('/set-count-title', (req, res) => {
+app.post('/set-count-title', async (req, res) => {
   try {
     const { title } = req.body;
     if (!title || typeof title !== 'string') return res.status(400).json({ error: 'Título inválido' });
     countTitle = title.trim();
-    saveData();
     res.status(200).json({ message: `Título definido como "${countTitle}"` });
   } catch (error) {
     console.error('Erro ao definir título:', error);
@@ -255,22 +237,24 @@ app.post('/set-count-title', (req, res) => {
   }
 });
 
-app.post('/count-store', (req, res) => {
+app.post('/count-store', async (req, res) => {
   try {
-    const { code, quantity } = req.body;
+    const { code, quantity, countId } = req.body;
     if (!code || typeof code !== 'string') return res.status(400).json({ error: 'Código inválido' });
     const qty = parseInt(quantity, 10) || 1;
     if (qty <= 0) return res.status(400).json({ error: 'Quantidade inválida' });
+    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
 
+    const result = await pool.query('SELECT store_data FROM counts WHERE id = $1', [countId]);
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
+
+    storeData = result.rows[0].store_data || [];
     storeData.push({ code: extractNumericCode(code), quantity: qty });
-    saveData();
 
-    const currentCountIndex = pastCounts.findIndex(c => c.title === countTitle && c.status !== 'finalized');
-    if (currentCountIndex !== -1) {
-      pastCounts[currentCountIndex].storeData = storeData;
-      pastCounts[currentCountIndex].status = 'created';
-      savePastCounts();
-    }
+    await pool.query(
+      'UPDATE counts SET store_data = $1, status = $2 WHERE id = $3',
+      [JSON.stringify(storeData), 'created', countId]
+    );
 
     res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}` });
   } catch (error) {
@@ -279,10 +263,17 @@ app.post('/count-store', (req, res) => {
   }
 });
 
-app.post('/save-count', (req, res) => {
+app.post('/save-count', async (req, res) => {
   try {
+    const { countId } = req.body;
+    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
+
+    const result = await pool.query('SELECT store_data FROM counts WHERE id = $1', [countId]);
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
+
+    storeData = result.rows[0].store_data || [];
     if (storeData.length === 0) return res.status(400).json({ error: 'Nenhuma contagem para salvar' });
-    saveData();
+
     res.status(200).json({ message: 'Contagem salva!' });
   } catch (error) {
     console.error('Erro ao salvar contagem:', error);
@@ -290,7 +281,7 @@ app.post('/save-count', (req, res) => {
   }
 });
 
-function generateReport(filterDifferences = false) {
+function generateReport(systemData, storeData, countTitle, filterDifferences = false) {
   if (systemData.length === 0) throw new Error('Nenhum dado do sistema');
 
   const storeCount = storeData.reduce((acc, entry) => {
@@ -337,7 +328,7 @@ function generateReport(filterDifferences = false) {
     reportDetails = reportDetails.filter(item => item.Diferença !== 0);
   }
 
-  const report = {
+  return {
     title: countTitle || 'Contagem sem título',
     timestamp: new Date().toISOString(),
     type: filterDifferences ? 'synthetic' : 'detailed',
@@ -351,25 +342,34 @@ function generateReport(filterDifferences = false) {
     details: reportDetails,
     status: 'finalized',
   };
-
-  const currentCountIndex = pastCounts.findIndex(c => c.title === countTitle && c.status !== 'finalized');
-  if (currentCountIndex !== -1) {
-    pastCounts[currentCountIndex] = report;
-  } else {
-    pastCounts.push(report);
-  }
-  savePastCounts();
-
-  return report;
 }
 
-app.get('/report-detailed', (req, res) => {
+app.get('/report-detailed', async (req, res) => {
   try {
-    loadSavedData();
-    if (systemData.length === 0) {
+    const { countId } = req.query;
+    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
+
+    const result = await pool.query('SELECT * FROM counts WHERE id = $1', [countId]);
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
+
+    const count = result.rows[0];
+    if (count.system_data.length === 0) {
       return res.status(400).json({ error: 'Nenhum dado do sistema disponível para gerar o relatório' });
     }
-    const report = generateReport(false);
+
+    const report = generateReport(count.system_data, count.store_data, count.title, false);
+    await pool.query(
+      'UPDATE counts SET system_data = $1, store_data = $2, summary = $3, details = $4, status = $5 WHERE id = $6',
+      [
+        JSON.stringify(report.systemData),
+        JSON.stringify(report.storeData),
+        JSON.stringify(report.summary),
+        JSON.stringify(report.details),
+        report.status,
+        countId,
+      ]
+    );
+
     res.status(200).json(report);
   } catch (error) {
     console.error('Erro ao gerar relatório detalhado:', error);
@@ -377,13 +377,32 @@ app.get('/report-detailed', (req, res) => {
   }
 });
 
-app.get('/report-synthetic', (req, res) => {
+app.get('/report-synthetic', async (req, res) => {
   try {
-    loadSavedData();
-    if (systemData.length === 0) {
+    const { countId } = req.query;
+    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
+
+    const result = await pool.query('SELECT * FROM counts WHERE id = $1', [countId]);
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
+
+    const count = result.rows[0];
+    if (count.system_data.length === 0) {
       return res.status(400).json({ error: 'Nenhum dado do sistema disponível para gerar o relatório' });
     }
-    const report = generateReport(true);
+
+    const report = generateReport(count.system_data, count.store_data, count.title, true);
+    await pool.query(
+      'UPDATE counts SET system_data = $1, store_data = $2, summary = $3, details = $4, status = $5 WHERE id = $6',
+      [
+        JSON.stringify(report.systemData),
+        JSON.stringify(report.storeData),
+        JSON.stringify(report.summary),
+        JSON.stringify(report.details),
+        report.status,
+        countId,
+      ]
+    );
+
     res.status(200).json(report);
   } catch (error) {
     console.error('Erro ao gerar relatório sintético:', error);
@@ -391,26 +410,28 @@ app.get('/report-synthetic', (req, res) => {
   }
 });
 
-app.get('/past-counts', (req, res) => {
+app.get('/past-counts', async (req, res) => {
   try {
     const { status } = req.query;
-    let filteredCounts = pastCounts;
+    let query = 'SELECT * FROM counts';
+    const params = [];
     if (status) {
-      filteredCounts = pastCounts.filter(c => c.status === status);
+      query += ' WHERE status = $1';
+      params.push(status);
     }
-    res.status(200).json(filteredCounts);
+    const result = await pool.query(query, params);
+    res.status(200).json(result.rows);
   } catch (error) {
     console.error('Erro ao listar contagens:', error);
     res.status(500).json({ error: 'Erro ao listar contagens: ' + error.message });
   }
 });
 
-app.post('/reset', (req, res) => {
+app.post('/reset', async (req, res) => {
   try {
     systemData = [];
     storeData = [];
     countTitle = '';
-    saveData();
     res.status(200).json({ message: 'Dados reiniciados!' });
   } catch (error) {
     console.error('Erro ao reiniciar:', error);
@@ -438,6 +459,3 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(port, () => console.log(`Servidor na porta ${port}`));
-
-process.on('SIGINT', () => { saveData(); savePastCounts(); process.exit(0); });
-process.on('SIGTERM', () => { saveData(); savePastCounts(); process.exit(0); });
