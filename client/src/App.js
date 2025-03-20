@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import ActiveCounts from './ActiveCounts';
+import ActiveCount from './ActiveCount'; // Correto: usando ActiveCount (sem "S")
 import PastCounts from './PastCounts';
 import './App.css';
 
@@ -16,7 +16,7 @@ function App() {
       <main className="App-main">
         <Router>
           <Routes>
-            <Route path="/" element={<ActiveCounts />} />
+            <Route path="/" element={<ActiveCount />} /> {/* Correto: usando ActiveCount */}
             <Route path="/past-counts" element={<PastCounts />} />
           </Routes>
         </Router>
