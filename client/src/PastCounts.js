@@ -9,7 +9,7 @@ const PastCounts = () => {
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        console.log('Fazendo requisição para /past-counts...');
+        console.log('Fazendo requisição para /past-counts (sem filtro de status)...');
         const response = await axios.get('/past-counts');
         console.log('Resposta recebida do /past-counts:', response.data);
         if (!Array.isArray(response.data)) {
@@ -36,11 +36,14 @@ const PastCounts = () => {
         <p>Nenhuma contagem encontrada.</p>
       ) : (
         <ul>
-          {counts.map((count) => (
-            <li key={count.id}>
-              {count.title} - {new Date(count.timestamp).toLocaleString()} - Status: {count.status}
-            </li>
-          ))}
+          {counts.map((count) => {
+            console.log('Renderizando contagem:', count);
+            return (
+              <li key={count.id}>
+                {count.title} - {new Date(count.timestamp).toLocaleString()} - Status: {count.status}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
