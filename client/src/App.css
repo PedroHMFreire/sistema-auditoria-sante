@@ -1,4 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+@font-face {
+  font-family: 'Norwester';
+  src: url('https://github.com/jamiewilson/norwester/raw/master/dist/fonts/norwester.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
 
 * {
   margin: 0;
@@ -8,7 +14,8 @@
 
 body {
   font-family: 'Poppins', sans-serif;
-  transition: background-color 0.3s, color 0.3s;
+  background-color: #1C2526;
+  color: #FFFFFF;
 }
 
 .App {
@@ -16,40 +23,21 @@ body {
   margin: 40px auto;
   padding: 20px;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transition: background-color 0.3s;
-}
-
-.App.light {
-  background-color: #ffffff;
-  color: #333;
-}
-
-.App.dark {
-  background-color: #1e1e1e;
-  color: #e0e0e0;
+  background-color: #1C2526;
 }
 
 .App-header {
   text-align: center;
   padding: 20px;
-  border-bottom: 1px solid #ddd;
-}
-
-.App-header.light {
-  background-color: #fff;
-  border-color: #ddd;
-}
-
-.App-header.dark {
-  background-color: #2c2c2c;
-  border-color: #444;
+  border-bottom: 1px solid #444;
+  background-color: #1C2526;
 }
 
 .app-title {
+  font-family: 'Norwester', sans-serif;
   font-size: 2.5em;
-  font-weight: 600;
-  color: #ff6200;
+  font-weight: bold;
+  color: #FF6200;
   margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -64,7 +52,7 @@ nav {
 
 .nav-link, .category-link {
   text-decoration: none;
-  color: #ff6200;
+  color: #FFFFFF;
   font-size: 1em;
   padding: 8px 16px;
   border-radius: 6px;
@@ -72,8 +60,8 @@ nav {
 }
 
 .nav-link:hover, .category-link:hover {
-  background-color: #ff6200;
-  color: #fff;
+  background-color: #FF6200;
+  color: #000000;
 }
 
 .App-main {
@@ -81,36 +69,23 @@ nav {
 }
 
 .card {
-  background: rgba(255, 255, 255, 0.9);
+  background: #1C2526;
   border-radius: 10px;
   padding: 20px;
   margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.card.light {
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.card.dark {
-  background: rgba(40, 40, 40, 0.9);
 }
 
 .card h2 {
   font-size: 1.8em;
-  color: #ff6200;
+  color: #FFFFFF;
   margin-bottom: 15px;
   font-weight: 600;
 }
 
 .card p {
   font-size: 1em;
-  color: #666;
+  color: #FFFFFF;
   margin-bottom: 15px;
-}
-
-.card.dark p {
-  color: #bbb;
 }
 
 .field {
@@ -123,26 +98,21 @@ nav {
 .file-input,
 .text-input {
   padding: 12px;
-  border: 1px solid #ccc;
+  border: 1px solid #555;
   border-radius: 6px;
   font-size: 1em;
   width: 100%;
   max-width: 200px;
+  background-color: #333333;
+  color: #FFFFFF;
   transition: border-color 0.3s, box-shadow 0.3s;
 }
 
 .file-input:focus,
 .text-input:focus {
-  border-color: #ff6200;
+  border-color: #FF6200;
   box-shadow: 0 0 5px rgba(255, 98, 0, 0.3);
   outline: none;
-}
-
-.card.dark .file-input,
-.card.dark .text-input {
-  border-color: #555;
-  background: #2c2c2c;
-  color: #e0e0e0;
 }
 
 .btn {
@@ -155,47 +125,29 @@ nav {
 }
 
 .btn.primary {
-  background-color: #ff6200;
-  color: #fff;
+  background-color: #FF6200;
+  color: #000000;
 }
 
 .btn.primary:hover {
-  background-color: #e65c00;
+  background-color: #E65C00;
   transform: translateY(-2px);
 }
 
 .btn.secondary {
-  background-color: #34a853;
-  color: #fff;
+  background-color: #34A853;
+  color: #FFFFFF;
 }
 
 .btn.secondary:hover {
-  background-color: #2d8e46;
+  background-color: #2D8E46;
   transform: translateY(-2px);
-}
-
-.theme-toggle {
-  padding: 8px 16px;
-  background-color: #ff6200;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.theme-toggle:hover {
-  background-color: #e65c00;
 }
 
 .count-info {
   font-size: 0.9em;
-  color: #666;
+  color: #FFFFFF;
   margin-top: 10px;
-}
-
-.card.dark .count-info {
-  color: #bbb;
 }
 
 .count-categories {
@@ -217,7 +169,7 @@ nav {
 .report-final h3,
 .report-final h4 {
   font-size: 1.3em;
-  color: #ff6200;
+  color: #FFFFFF;
   margin-bottom: 10px;
 }
 
@@ -229,23 +181,15 @@ nav {
 
 .report-table th,
 .report-table td {
-  border: 1px solid #ddd;
+  border: 1px solid #555;
   padding: 10px;
   text-align: center;
+  color: #FFFFFF;
 }
 
 .report-table th {
-  background-color: #f5f5f5;
-  color: #333;
-}
-
-.card.dark .report-table th {
-  background-color: #333;
-  color: #e0e0e0;
-}
-
-.card.dark .report-table td {
-  border-color: #555;
+  background-color: #333333;
+  color: #FFFFFF;
 }
 
 .past-counts-list {
@@ -256,12 +200,8 @@ nav {
   padding: 15px;
   border-radius: 8px;
   margin-bottom: 15px;
-  background: rgba(255, 255, 255, 0.8);
+  background: #2C2C2C;
   transition: transform 0.2s;
-}
-
-.card.dark .past-count-item {
-  background: rgba(40, 40, 40, 0.8);
 }
 
 .past-count-item:hover {
@@ -270,17 +210,13 @@ nav {
 
 .past-count-item h3 {
   font-size: 1.2em;
-  color: #ff6200;
+  color: #FFFFFF;
   margin-bottom: 10px;
 }
 
 .past-count-item p {
   font-size: 1em;
-  color: #666;
-}
-
-.card.dark .past-count-item p {
-  color: #bbb;
+  color: #FFFFFF;
 }
 
 .report-actions {
@@ -290,16 +226,14 @@ nav {
 }
 
 @media print {
-  .App-header, .no-print, .theme-toggle, .count-categories, .count-actions {
+  .App-header, .no-print, .count-categories, .count-actions {
     display: none !important;
   }
   .App-main {
-    box-shadow: none;
     padding: 0;
   }
   .card {
     border: none;
-    box-shadow: none;
     padding: 0;
   }
   .report-final {
@@ -314,7 +248,7 @@ nav {
     padding: 5px;
   }
   .report-table th {
-    background-color: #e0e0e0;
+    background-color: #E0E0E0;
   }
 }
 
