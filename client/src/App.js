@@ -6,12 +6,22 @@ import './App.css';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<ActiveCounts />} />
-        <Route path="/past-counts" element={<PastCounts />} />
-      </Routes>
-    </Router>
+    <div className="App">
+      <header className="App-header">
+        <h1 className="app-title">AUDITÊ</h1>
+        <nav>
+          <a href="/past-counts" className="nav-link">Ver Contagens Salvas</a>
+        </nav>
+      </header>
+      <main className="App-main">
+        <Router>
+          <Routes>
+            <Route path="/" element={<ActiveCounts />} />
+            <Route path="/past-counts" element={<PastCounts />} />
+          </Routes>
+        </Router>
+      </main>
+    </div>
   );
 }
 
