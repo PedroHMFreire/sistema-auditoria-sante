@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 
-const ActiveCounts = () => {
+const ActiveCount = () => { // Corrigido: ActiveCounts -> ActiveCount
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
@@ -203,4 +203,4 @@ const ActiveCounts = () => {
   );
 };
 
-export default ActiveCounts;
+export default ActiveCount; // Corrigido: ActiveCounts -> ActiveCount
