@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
 
 const ActiveCounts = () => {
   const [file, setFile] = useState(null);
@@ -106,7 +105,6 @@ const ActiveCounts = () => {
   return (
     <div style={{ color: 'black', background: 'white', minHeight: '100vh', padding: '20px' }}>
       <h1>Sistema de Auditoria Sante</h1>
-      <Link to="/past-counts">Ver Contagens Salvas</Link>
       <h2>Criar Nova Contagem</h2>
       <form onSubmit={handleCreateCount}>
         <div>
