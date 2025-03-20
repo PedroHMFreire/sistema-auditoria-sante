@@ -9,8 +9,12 @@ const PastCounts = () => {
   useEffect(() => {
     const fetchCounts = async () => {
       try {
+        console.log('Fazendo requisição para /past-counts...');
         const response = await axios.get('/past-counts');
-        console.log('Dados recebidos do /past-counts:', response.data);
+        console.log('Resposta recebida do /past-counts:', response.data);
+        if (!Array.isArray(response.data)) {
+          throw new Error('Resposta do servidor não é um array');
+        }
         setCounts(response.data);
         setLoading(false);
       } catch (err) {
