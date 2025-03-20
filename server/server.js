@@ -92,6 +92,10 @@ function normalizeColumnName(name) {
 }
 
 function extractNumericCode(code) {
+  // Verificar se o código é undefined, null, vazio ou não é um valor que pode ser convertido para string
+  if (code == null || code === '' || (typeof code !== 'string' && typeof code !== 'number')) {
+    return '';
+  }
   return code.toString().replace(/[^0-9]/g, '');
 }
 
@@ -106,6 +110,9 @@ app.post('/create-count-from-excel', upload.single('file'), (req, res) => {
 
     if (rawData.length === 0) return res.status(400).json({ error: 'Planilha vazia' });
 
+    // Log para depuração
+    console.log('Dados brutos do Excel:', rawData);
+
     const headers = rawData[0].map(normalizeColumnName);
     const codeCol = headers.indexOf('codigo');
     const productCol = headers.indexOf('produto');
@@ -118,13 +125,28 @@ app.post('/create-count-from-excel', upload.single('file'), (req, res) => {
       });
     }
 
-    const systemData = rawData.slice(1).map(row => ({
-      code: extractNumericCode(row[codeCol]),
-      product: row[productCol] || '',
-      balance: parseFloat(row[balanceCol]) || 0,
-    })).filter(item => item.code && item.product);
+    const systemData = rawData.slice(1).filter(row => row && row.length > 0).map((row, index) => {
+      const code = extractNumericCode(row[codeCol]);
+      const product = row[productCol] ? String(row[productCol]).trim() : '';
+      const balance = parseFloat(row[balanceCol]) || 0;
 
-    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada' });
+      // Log para depuração
+      console.log(`Linha ${index + 2}: Código=${code}, Produto=${product}, Saldo=${balance}`);
+
+      // Ignorar linhas onde o código ou produto é vazio
+      if (!code || !product) {
+        console.log(`Linha ${index + 2} ignorada: Código ou Produto vazio`);
+        return null;
+      }
+
+      return {
+        code,
+        product,
+        balance,
+      };
+    }).filter(item => item !== null);
+
+    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada. Verifique se as colunas Código e Produto estão preenchidas.' });
 
     const newCount = {
       title: title || `Contagem sem título - ${new Date().toISOString().slice(0, 10)}`,
@@ -192,13 +214,21 @@ app.post('/upload-system-excel', upload.single('file'), (req, res) => {
       });
     }
 
-    systemData = rawData.slice(1).map(row => ({
-      code: extractNumericCode(row[codeCol]),
-      product: row[productCol] || '',
-      balance: parseFloat(row[balanceCol]) || 0,
-    })).filter(item => item.code && item.product);
+    systemData = rawData.slice(1).filter(row => row && row.length > 0).map(row => {
+      const code = extractNumericCode(row[codeCol]);
+      const product = row[productCol] ? String(row[productCol]).trim() : '';
+      const balance = parseFloat(row[balanceCol]) || 0;
 
-    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada' });
+      if (!code || !product) return null;
+
+      return {
+        code,
+        product,
+        balance,
+      };
+    }).filter(item => item !== null);
+
+    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada. Verifique se as colunas Código e Produto estão preenchidas.' });
 
     saveData();
     const totalItems = systemData.length;
@@ -235,11 +265,10 @@ app.post('/count-store', (req, res) => {
     storeData.push({ code: extractNumericCode(code), quantity: qty });
     saveData();
 
-    // Atualizar status para 'in-progress' se ainda não finalizada
     const currentCountIndex = pastCounts.findIndex(c => c.title === countTitle && c.status !== 'finalized');
     if (currentCountIndex !== -1) {
       pastCounts[currentCountIndex].storeData = storeData;
-      pastCounts[currentCountIndex].status = 'created'; // Mantém como 'created' até finalizar
+      pastCounts[currentCountIndex].status = 'created';
       savePastCounts();
     }
 
@@ -304,7 +333,6 @@ function generateReport(filterDifferences = false) {
     });
   });
 
-  // Corrigir a lógica de filtragem: atribuir o resultado de volta ao reportDetails
   if (filterDifferences) {
     reportDetails = reportDetails.filter(item => item.Diferença !== 0);
   }
@@ -337,7 +365,6 @@ function generateReport(filterDifferences = false) {
 
 app.get('/report-detailed', (req, res) => {
   try {
-    // Carregar os dados da contagem atual a partir do arquivo
     loadSavedData();
     if (systemData.length === 0) {
       return res.status(400).json({ error: 'Nenhum dado do sistema disponível para gerar o relatório' });
@@ -352,7 +379,6 @@ app.get('/report-detailed', (req, res) => {
 
 app.get('/report-synthetic', (req, res) => {
   try {
-    // Carregar os dados da contagem atual a partir do arquivo
     loadSavedData();
     if (systemData.length === 0) {
       return res.status(400).json({ error: 'Nenhum dado do sistema disponível para gerar o relatório' });
