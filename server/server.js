@@ -5,53 +5,19 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs').promises; // Usar a versão com promessas do fs
-const { Pool } = require('pg');
+const fs = require('fs').promises;
 
 app.use(cors());
 app.use(express.json());
-
-// Configuração do PostgreSQL
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
-
-// Inicializar o banco de dados
-async function initializeDatabase() {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS counts (
-        id SERIAL PRIMARY KEY,
-        title VARCHAR(255) NOT NULL,
-        timestamp TIMESTAMP NOT NULL,
-        type VARCHAR(50) NOT NULL,
-        system_data JSONB NOT NULL,
-        store_data JSONB NOT NULL,
-        summary JSONB NOT NULL,
-        details JSONB NOT NULL,
-        status VARCHAR(50) NOT NULL
-      );
-    `);
-    console.log('Tabela "counts" criada ou já existe.');
-  } catch (error) {
-    console.error('Erro ao inicializar o banco de dados:', error);
-    // Não encerrar o servidor, apenas logar o erro
-  }
-}
-
-initializeDatabase();
 
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 
 // Criar o diretório de uploads e limpá-lo na inicialização
 async function initializeUploadDir() {
   try {
-    // Verificar se o diretório existe, se não, criá-lo
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
     console.log('Diretório de uploads criado:', UPLOAD_DIR);
 
-    // Limpar todos os arquivos no diretório de uploads
     const files = await fs.readdir(UPLOAD_DIR);
     for (const file of files) {
       await fs.unlink(path.join(UPLOAD_DIR, file));
@@ -60,12 +26,13 @@ async function initializeUploadDir() {
     console.log('Diretório de uploads limpo.');
   } catch (error) {
     console.error('Erro ao inicializar/limpar o diretório de uploads:', error);
-    // Não encerrar o servidor, apenas logar o erro
   }
 }
 
 initializeUploadDir();
 
+// Armazenamento em memória
+let counts = []; // Array para armazenar as contagens
 let systemData = [];
 let storeData = [];
 let countTitle = '';
@@ -144,39 +111,24 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
     if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada. Verifique se as colunas Código e Produto estão preenchidas.' });
 
     const newCount = {
+      id: counts.length + 1, // Simular um ID incremental
       title: title || `Contagem sem título - ${new Date().toISOString().slice(0, 10)}`,
       timestamp: new Date().toISOString(),
       type: 'pre-created',
-      systemData,
-      storeData: [],
+      system_data: systemData,
+      store_data: [],
       summary: { totalProductsInExcess: 0, totalProductsMissing: 0, totalProductsRegular: 0 },
       details: [],
       status: 'created',
     };
 
-    const result = await pool.query(
-      `INSERT INTO counts (title, timestamp, type, system_data, store_data, summary, details, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id`,
-      [
-        newCount.title,
-        newCount.timestamp,
-        newCount.type,
-        JSON.stringify(newCount.systemData),
-        JSON.stringify(newCount.storeData),
-        JSON.stringify(newCount.summary),
-        JSON.stringify(newCount.details),
-        newCount.status,
-      ]
-    );
+    counts.push(newCount);
+    console.log('Nova contagem criada:', newCount);
 
-    const countId = result.rows[0].id;
-
-    // Remover o arquivo após o processamento
     await fs.unlink(req.file.path).catch(err => console.error('Erro ao excluir arquivo:', err));
     res.status(200).json({
       message: 'Contagem pré-criada com sucesso!',
-      countId,
+      countId: newCount.id,
       systemData,
     });
   } catch (error) {
@@ -188,12 +140,9 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
 app.post('/load-count', async (req, res) => {
   try {
     const { countId } = req.body;
-    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
+    const selectedCount = counts.find(count => count.id === parseInt(countId));
+    if (!selectedCount) return res.status(400).json({ error: 'ID inválido' });
 
-    const result = await pool.query('SELECT * FROM counts WHERE id = $1', [countId]);
-    if (result.rows.length === 0) return res.status(400).json({ error: 'ID inválido' });
-
-    const selectedCount = result.rows[0];
     systemData = Array.isArray(selectedCount.system_data) ? selectedCount.system_data : [];
     storeData = Array.isArray(selectedCount.store_data) ? selectedCount.store_data : [];
     countTitle = selectedCount.title || '';
@@ -270,16 +219,14 @@ app.post('/count-store', async (req, res) => {
     if (qty <= 0) return res.status(400).json({ error: 'Quantidade inválida' });
     if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
 
-    const result = await pool.query('SELECT store_data FROM counts WHERE id = $1', [countId]);
-    if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
+    const count = counts.find(c => c.id === parseInt(countId));
+    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
 
-    storeData = Array.isArray(result.rows[0].store_data) ? result.rows[0].store_data : [];
+    storeData = Array.isArray(count.store_data) ? count.store_data : [];
     storeData.push({ code: extractNumericCode(code), quantity: qty });
 
-    await pool.query(
-      'UPDATE counts SET store_data = $1, status = $2 WHERE id = $3',
-      [JSON.stringify(storeData), 'created', countId]
-    );
+    count.store_data = storeData;
+    count.status = 'created';
 
     res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}` });
   } catch (error) {
@@ -293,10 +240,10 @@ app.post('/save-count', async (req, res) => {
     const { countId } = req.body;
     if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
 
-    const result = await pool.query('SELECT store_data FROM counts WHERE id = $1', [countId]);
-    if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
+    const count = counts.find(c => c.id === parseInt(countId));
+    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
 
-    storeData = Array.isArray(result.rows[0].store_data) ? result.rows[0].store_data : [];
+    storeData = Array.isArray(count.store_data) ? count.store_data : [];
     if (storeData.length === 0) return res.status(400).json({ error: 'Nenhuma contagem para salvar' });
 
     res.status(200).json({ message: 'Contagem salva!' });
@@ -359,8 +306,8 @@ function generateReport(systemData, storeData, countTitle, filterDifferences = f
     title: countTitle || 'Contagem sem título',
     timestamp: new Date().toISOString(),
     type: filterDifferences ? 'synthetic' : 'detailed',
-    systemData,
-    storeData,
+    system_data: systemData,
+    store_data: storeData,
     summary: {
       totalProductsInExcess: productsInExcess,
       totalProductsMissing: productsMissing,
@@ -376,10 +323,9 @@ app.get('/report-detailed', async (req, res) => {
     const { countId } = req.query;
     if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
 
-    const result = await pool.query('SELECT * FROM counts WHERE id = $1', [countId]);
-    if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
+    const count = counts.find(c => c.id === parseInt(countId));
+    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
 
-    const count = result.rows[0];
     const systemData = Array.isArray(count.system_data) ? count.system_data : [];
     const storeData = Array.isArray(count.store_data) ? count.store_data : [];
 
@@ -388,17 +334,11 @@ app.get('/report-detailed', async (req, res) => {
     }
 
     const report = generateReport(systemData, storeData, count.title, false);
-    await pool.query(
-      'UPDATE counts SET system_data = $1, store_data = $2, summary = $3, details = $4, status = $5 WHERE id = $6',
-      [
-        JSON.stringify(report.systemData),
-        JSON.stringify(report.storeData),
-        JSON.stringify(report.summary),
-        JSON.stringify(report.details),
-        report.status,
-        countId,
-      ]
-    );
+    count.system_data = report.system_data;
+    count.store_data = report.store_data;
+    count.summary = report.summary;
+    count.details = report.details;
+    count.status = report.status;
 
     res.status(200).json(report);
   } catch (error) {
@@ -412,10 +352,9 @@ app.get('/report-synthetic', async (req, res) => {
     const { countId } = req.query;
     if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
 
-    const result = await pool.query('SELECT * FROM counts WHERE id = $1', [countId]);
-    if (result.rows.length === 0) return res.status(400).json({ error: 'Contagem não encontrada' });
+    const count = counts.find(c => c.id === parseInt(countId));
+    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
 
-    const count = result.rows[0];
     const systemData = Array.isArray(count.system_data) ? count.system_data : [];
     const storeData = Array.isArray(count.store_data) ? count.store_data : [];
 
@@ -424,17 +363,11 @@ app.get('/report-synthetic', async (req, res) => {
     }
 
     const report = generateReport(systemData, storeData, count.title, true);
-    await pool.query(
-      'UPDATE counts SET system_data = $1, store_data = $2, summary = $3, details = $4, status = $5 WHERE id = $6',
-      [
-        JSON.stringify(report.systemData),
-        JSON.stringify(report.storeData),
-        JSON.stringify(report.summary),
-        JSON.stringify(report.details),
-        report.status,
-        countId,
-      ]
-    );
+    count.system_data = report.system_data;
+    count.store_data = report.store_data;
+    count.summary = report.summary;
+    count.details = report.details;
+    count.status = report.status;
 
     res.status(200).json(report);
   } catch (error) {
@@ -446,51 +379,15 @@ app.get('/report-synthetic', async (req, res) => {
 app.get('/past-counts', async (req, res) => {
   try {
     const { status } = req.query;
-    let query = 'SELECT * FROM counts';
-    const params = [];
+    let filteredCounts = counts;
     if (status) {
-      query += ' WHERE status = $1';
-      params.push(status);
+      filteredCounts = counts.filter(count => count.status === status);
     }
-    console.log('Executando query:', query, 'com parâmetros:', params);
-    const result = await pool.query(query, params);
-    console.log('Resultado bruto da query:', result.rows);
-
-    // Validar e processar os dados retornados
-    const counts = result.rows.map(row => {
-      const systemData = Array.isArray(row.system_data) ? row.system_data : [];
-      const storeData = Array.isArray(row.store_data) ? row.store_data : [];
-      const summary = typeof row.summary === 'object' && row.summary !== null ? row.summary : {};
-      const details = Array.isArray(row.details) ? row.details : [];
-
-      console.log(`Detalhes de system_data para contagem ${row.id}:`, systemData);
-
-      return {
-        ...row,
-        system_data: systemData,
-        store_data: storeData,
-        summary: summary,
-        details: details,
-      };
-    });
-
-    console.log('Dados processados enviados para o frontend:', counts);
-    res.status(200).json(counts);
+    console.log('Dados enviados para o frontend:', filteredCounts);
+    res.status(200).json(filteredCounts);
   } catch (error) {
     console.error('Erro ao listar contagens:', error);
     res.status(500).json({ error: 'Erro ao listar contagens: ' + error.message });
-  }
-});
-
-// Endpoint temporário para limpar o banco de dados
-app.post('/clear-database', async (req, res) => {
-  try {
-    await pool.query('TRUNCATE TABLE counts RESTART IDENTITY');
-    console.log('Banco de dados limpo com sucesso.');
-    res.status(200).json({ message: 'Banco de dados limpo com sucesso!' });
-  } catch (error) {
-    console.error('Erro ao limpar o banco de dados:', error);
-    res.status(500).json({ error: 'Erro ao limpar o banco de dados: ' + error.message });
   }
 });
 
@@ -499,6 +396,7 @@ app.post('/reset', async (req, res) => {
     systemData = [];
     storeData = [];
     countTitle = '';
+    counts = []; // Limpar todas as contagens
     res.status(200).json({ message: 'Dados reiniciados!' });
   } catch (error) {
     console.error('Erro ao reiniciar:', error);
