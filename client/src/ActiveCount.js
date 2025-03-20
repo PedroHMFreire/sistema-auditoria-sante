@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-const ActiveCounts = () => {
+const ActiveCount = () => { // Correto: ActiveCount (sem "S")
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
@@ -232,4 +232,4 @@ const ActiveCounts = () => {
   );
 };
 
-export default ActiveCounts;
+export default ActiveCount; // Correto: ActiveCount (sem "S")
