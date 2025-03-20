@@ -374,7 +374,66 @@ app.get('/report-detailed', async (req, res) => {
     count.status = report.status;
     await saveCounts(counts);
 
-    res.status(200).json(report);
+    // Renderizar o relatório como HTML
+    const html = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Relatório Detalhado - AUDITÊ</title>
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+        <style>
+          ${fs.readFileSync(path.join(__dirname, '../client/src/App.css'), 'utf8')}
+        </style>
+      </head>
+      <body>
+        <div class="App">
+          <header class="App-header">
+            <h1 class="app-title">AUDITÊ</h1>
+            <nav>
+              <a href="/" class="nav-link">Voltar</a>
+            </nav>
+          </header>
+          <main class="App-main">
+            <div class="card">
+              <h2>Relatório Detalhado</h2>
+              <p><strong>Título:</strong> ${report.title}</p>
+              <p><strong>Data:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
+              <h3>Resumo</h3>
+              <p>Produtos em Excesso: ${report.summary.totalProductsInExcess}</p>
+              <p>Produtos Faltando: ${report.summary.totalProductsMissing}</p>
+              <p>Produtos Regulares: ${report.summary.totalProductsRegular}</p>
+              <h3>Detalhes</h3>
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Produto</th>
+                    <th>Saldo Estoque</th>
+                    <th>Contado</th>
+                    <th>Diferença</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${report.details.map(item => `
+                    <tr>
+                      <td>${item.Código}</td>
+                      <td>${item.Produto}</td>
+                      <td>${item.Saldo_Estoque}</td>
+                      <td>${item.Contado}</td>
+                      <td>${item.Diferença}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </main>
+        </div>
+      </body>
+      </html>
+    `;
+    res.status(200).send(html);
   } catch (error) {
     console.error('Erro ao gerar relatório detalhado:', error);
     res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
@@ -404,7 +463,68 @@ app.get('/report-synthetic', async (req, res) => {
     count.status = report.status;
     await saveCounts(counts);
 
-    res.status(200).json(report);
+    // Renderizar o relatório como HTML
+    const html = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Relatório Sintético - AUDITÊ</title>
+        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+        <style>
+          ${fs.readFileSync(path.join(__dirname, '../client/src/App.css'), 'utf8')}
+        </style>
+      </head>
+      <body>
+        <div class="App">
+          <header class="App-header">
+            <h1 class="app-title">AUDITÊ</h1>
+            <nav>
+              <a href="/" class="nav-link">Voltar</a>
+            </nav>
+          </header>
+          <main class="App-main">
+            <div class="card">
+              <h2>Relatório Sintético</h2>
+              <p><strong>Título:</strong> ${report.title}</p>
+              <p><strong>Data:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
+              <h3>Resumo</h3>
+              <p>Produtos em Excesso: ${report.summary.totalProductsInExcess}</p>
+              <p>Produtos Faltando: ${report.summary.totalProductsMissing}</p>
+              <p>Produtos Regulares: ${report.summary.totalProductsRegular}</p>
+              <h3>Detalhes (Apenas Diferenças)</h3>
+              ${report.details.length > 0 ? `
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th>Código</th>
+                      <th>Produto</th>
+                      <th>Saldo Estoque</th>
+                      <th>Contado</th>
+                      <th>Diferença</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${report.details.map(item => `
+                      <tr>
+                        <td>${item.Código}</td>
+                        <td>${item.Produto}</td>
+                        <td>${item.Saldo_Estoque}</td>
+                        <td>${item.Contado}</td>
+                        <td>${item.Diferença}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              ` : '<p>Nenhuma diferença encontrada.</p>'}
+            </div>
+          </main>
+        </div>
+      </body>
+      </html>
+    `;
+    res.status(200).send(html);
   } catch (error) {
     console.error('Erro ao gerar relatório sintético:', error);
     res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
