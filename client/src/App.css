@@ -150,26 +150,10 @@ nav {
   transform: translateY(-2px);
 }
 
-.btn.secondary {
-  background-color: #34A853;
-  color: #FFFFFF;
-}
-
-.btn.secondary:hover {
-  background-color: #2D8E46;
-  transform: translateY(-2px);
-}
-
 .count-info {
   font-size: 0.9em;
   color: #FFFFFF;
   margin-top: 10px;
-}
-
-.count-categories {
-  display: flex;
-  gap: 15px;
-  flex-wrap: wrap;
 }
 
 .count-actions {
@@ -242,7 +226,7 @@ nav {
 }
 
 @media print {
-  .App-header, .no-print, .count-categories, .count-actions {
+  .App-header, .no-print, .count-actions {
     display: none !important;
   }
   .App-main {
@@ -254,9 +238,6 @@ nav {
   }
   .report-final {
     margin: 0;
-  }
-  .print-only {
-    display: block !important;
   }
   .report-table th,
   .report-table td {
@@ -293,13 +274,6 @@ nav {
   }
   .btn {
     width: 100%;
-  }
-  .count-categories {
-    flex-direction: column;
-  }
-  .category-link {
-    width: 100%;
-    text-align: center;
   }
   .count-actions {
     flex-direction: column;
