@@ -380,6 +380,29 @@ const reportStyles = `
     background-color: #333333;
     color: #FFFFFF;
   }
+  .report-actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+  }
+  .action-btn {
+    background-color: #FF6200;
+    border: none;
+    border-radius: 6px;
+    padding: 10px;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+  }
+  .action-btn:hover {
+    background-color: #E65C00;
+    transform: translateY(-2px);
+  }
+  .action-btn svg {
+    width: 24px;
+    height: 24px;
+    fill: #000000;
+  }
   @media print {
     .App-header {
       display: none !important;
@@ -390,6 +413,9 @@ const reportStyles = `
     .card {
       border: none;
       padding: 0;
+    }
+    .report-actions {
+      display: none !important;
     }
     .report-table th,
     .report-table td {
@@ -418,6 +444,11 @@ app.get('/report-detailed', async (req, res) => {
     }
 
     const report = generateReport(systemData, storeData, count.title, false);
+
+    // URL para compartilhar no WhatsApp
+    const shareUrl = encodeURIComponent(`${req.protocol}://${req.get('host')}${req.originalUrl}`);
+    const whatsappMessage = encodeURIComponent(`Confira o relatório detalhado: ${report.title}`);
+    const whatsappLink = `https://api.whatsapp.com/send?text=${whatsappMessage}%20${shareUrl}`;
 
     const html = `
       <!DOCTYPE html>
@@ -471,6 +502,18 @@ app.get('/report-detailed', async (req, res) => {
                   `).join('')}
                 </tbody>
               </table>
+              <div class="report-actions">
+                <button class="action-btn" onclick="window.print()" title="Imprimir">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+                  </svg>
+                </button>
+                <a href="${whatsappLink}" target="_blank" class="action-btn" title="Enviar por WhatsApp">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.134.56 4.14 1.53 5.894L0 24l6.252-1.64A11.95 11.95 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22.002a9.95 9.95 0 01-5.073-1.39l-.354-.21-3.71.973.987-3.61-.21-.354a9.95 9.95 0 01-1.39-5.073c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10zm5.92-7.316c-.31-.155-1.84-.905-2.126-.998-.287-.094-.496-.102-.705.103-.21.205-.81.998-.998 1.202-.188.205-.376.23-.686.075-.31-.155-1.31-.483-2.496-1.54-.92-.823-1.54-1.84-1.728-2.15-.188-.31-.02-.477.14-.632.144-.14.31-.362.465-.558.155-.195.205-.31.31-.514.103-.205.052-.387-.026-.542-.077-.155-.705-1.702-.965-2.332-.252-.614-.514-.514-.705-.514-.188 0-.413-.01-.638-.01-.225 0-.592.077-.905.387-.31.31-1.18 1.15-1.18 2.805 0 1.655 1.205 3.255 1.375 3.48.17.225 2.39 3.64 5.794 5.103 3.404 1.463 3.404.975 4.02.81.615-.165 1.84-.752 2.1-1.477.26-.725.26-1.34.18-1.477-.077-.138-.287-.225-.596-.38z"/>
+                  </svg>
+                </a>
+              </div>
             </div>
           </main>
         </div>
@@ -500,6 +543,11 @@ app.get('/report-synthetic', async (req, res) => {
     }
 
     const report = generateReport(systemData, storeData, count.title, true);
+
+    // URL para compartilhar no WhatsApp
+    const shareUrl = encodeURIComponent(`${req.protocol}://${req.get('host')}${req.originalUrl}`);
+    const whatsappMessage = encodeURIComponent(`Confira o relatório sintético: ${report.title}`);
+    const whatsappLink = `https://api.whatsapp.com/send?text=${whatsappMessage}%20${shareUrl}`;
 
     const html = `
       <!DOCTYPE html>
@@ -555,6 +603,18 @@ app.get('/report-synthetic', async (req, res) => {
                   </tbody>
                 </table>
               ` : '<p>Nenhuma diferença encontrada.</p>'}
+              <div class="report-actions">
+                <button class="action-btn" onclick="window.print()" title="Imprimir">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+                  </svg>
+                </button>
+                <a href="${whatsappLink}" target="_blank" class="action-btn" title="Enviar por WhatsApp">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.134.56 4.14 1.53 5.894L0 24l6.252-1.64A11.95 11.95 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22.002a9.95 9.95 0 01-5.073-1.39l-.354-.21-3.71.973.987-3.61-.21-.354a9.95 9.95 0 01-1.39-5.073c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10zm5.92-7.316c-.31-.155-1.84-.905-2.126-.998-.287-.094-.496-.102-.705.103-.21.205-.81.998-.998 1.202-.188.205-.376.23-.686.075-.31-.155-1.31-.483-2.496-1.54-.92-.823-1.54-1.84-1.728-2.15-.188-.31-.02-.477.14-.632.144-.14.31-.362.465-.558.155-.195.205-.31.31-.514.103-.205.052-.387-.026-.542-.077-.155-.705-1.702-.965-2.332-.252-.614-.514-.514-.705-.514-.188 0-.413-.01-.638-.01-.225 0-.592.077-.905.387-.31.31-1.18 1.15-1.18 2.805 0 1.655 1.205 3.255 1.375 3.48.17.225 2.39 3.64 5.794 5.103 3.404 1.463 3.404.975 4.02.81.615-.165 1.84-.752 2.1-1.477.26-.725.26-1.34.18-1.477-.077-.138-.287-.225-.596-.38z"/>
+                  </svg>
+                </a>
+              </div>
             </div>
           </main>
         </div>
