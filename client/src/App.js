@@ -11,11 +11,6 @@ function App() {
     <div className="App">
       <header className="App-header">
         <h1 className="app-title">AUDITÊ</h1>
-        <nav>
-          <a href="/" className="nav-link">Criar Contagem</a>
-          <a href="/created-counts" className="nav-link">Contagens Criadas</a>
-          <a href="/past-counts" className="nav-link">Contagens Finalizadas</a>
-        </nav>
       </header>
       <main className="App-main">
         <Router>
