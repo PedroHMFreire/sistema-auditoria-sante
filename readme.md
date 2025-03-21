@@ -1,12 +1,14 @@
 # Sistema de Auditoria - AUDITÊ
 
-Este é um sistema para auditoria de estoque, permitindo criar contagens, carregar dados de planilhas Excel, registrar contagens da loja e gerar relatórios. O sistema foi estilizado com um tema laranja e fundo preto, usando as fontes Poppins e Norwester.
+Este é um sistema para auditoria de estoque, permitindo criar contagens, iniciá-las, registrar contagens da loja e gerar relatórios. O sistema foi estilizado com um tema laranja e fundo preto, usando as fontes Poppins e Norwester.
 
 ## Estrutura do Projeto
 
 - **`/client/`**: Frontend (React)
-  - `src/ActiveCount.js`: Página inicial para criar e gerenciar contagens. <!-- Corrigido: ActiveCounts.js -> ActiveCount.js -->
-  - `src/PastCounts.js`: Página para visualizar contagens salvas.
+  - `src/ActiveCount.js`: Página inicial para criar contagens.
+  - `src/CreatedCounts.js`: Lista de contagens criadas, prontas para serem iniciadas.
+  - `src/CountDetail.js`: Página para iniciar e finalizar uma contagem específica.
+  - `src/PastCounts.js`: Lista de contagens finalizadas para consulta e impressão.
   - `src/App.css`: Estilos do sistema (tema laranja e preto, fontes personalizadas).
 - **`/server/`**: Backend (Node.js/Express)
   - `server.js`: Servidor principal, com endpoints para gerenciar contagens.
@@ -42,6 +44,6 @@ Este é um sistema para auditoria de estoque, permitindo criar contagens, carreg
 
 ## Notas
 
-- O sistema agora usa um arquivo `counts.json` para persistência de dados. No entanto, no plano gratuito do Render, os dados podem ser perdidos em reinicializações completas.
+- O sistema usa um arquivo `counts.json` para persistência de dados. No plano gratuito do Render, os dados podem ser perdidos em reinicializações completas.
 - Para maior robustez, considere usar um banco de dados PostgreSQL no Render.
 - O tema do sistema é laranja com fundo preto, com o título "AUDITÊ" e fontes personalizadas (Poppins e Norwester).
