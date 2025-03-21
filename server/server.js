@@ -613,8 +613,7 @@ if (process.env.NODE_ENV === 'production') {
           req.path.startsWith('/count-store') ||
           req.path.startsWith('/save-count') ||
           req.path.startsWith('/finalize-count') ||
-          req.path.start
-sWith('/report-detailed') ||
+          req.path.startsWith('/report-detailed') ||
           req.path.startsWith('/report-synthetic') ||
           req.path.startsWith('/past-counts') ||
           req.path.startsWith('/reset') ||
