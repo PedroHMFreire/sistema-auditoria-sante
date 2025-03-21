@@ -38,7 +38,7 @@ const ActiveCount = () => {
   return (
     <>
       <div className="card">
-        <h2>Criar Nova Contagem</h2>
+        <h2>NOVA CONTAGEM</h2>
         <form onSubmit={handleCreateCount}>
           <div className="field">
             <label>Título da Contagem:</label>
@@ -59,16 +59,16 @@ const ActiveCount = () => {
               className="file-input"
             />
           </div>
-          <button type="submit" className="btn primary">Criar Contagem</button>
+          <button type="submit" className="btn primary">CRIAR CONTAGEM</button>
         </form>
       </div>
 
       <div className="count-actions">
         <button onClick={() => navigate('/created-counts')} className="btn primary">
-          Contagens Criadas
+          CRIADAS
         </button>
-        <button onClick={() => navigate('/past-counts')} className="btn secondary">
-          Contagens Finalizadas
+        <button onClick={() => navigate('/past-counts')} className="btn primary">
+          FINALIZADAS
         </button>
       </div>
 
