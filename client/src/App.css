@@ -150,6 +150,21 @@ nav {
   transform: translateY(-2px);
 }
 
+.btn-back {
+  background: none;
+  border: none;
+  color: #FFFFFF;
+  font-size: 0.9em;
+  padding: 5px 10px;
+  cursor: pointer;
+  margin-bottom: 15px;
+  transition: color 0.3s;
+}
+
+.btn-back:hover {
+  color: #FF6200;
+}
+
 .count-info {
   font-size: 0.9em;
   color: #FFFFFF;
