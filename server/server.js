@@ -218,7 +218,7 @@ app.post('/finalize-count', async (req, res) => {
     count.status = 'finalized';
     count.summary = report.summary;
     count.details = report.details;
-    count.timestamp = new Date().toISOString(); // Atualiza o timestamp para a data de finalização
+    count.timestamp = new Date().toISOString();
     await saveCounts(counts);
 
     res.status(200).json({ message: 'Contagem finalizada com sucesso!' });
@@ -293,13 +293,122 @@ function generateReport(systemData, storeData, countTitle, filterDifferences = f
   };
 }
 
+// Estilos CSS inline para os relatórios
+const reportStyles = `
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #1C2526;
+    color: #FFFFFF;
+  }
+  .App {
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 20px;
+    border-radius: 12px;
+    background-color: #1C2526;
+  }
+  .App-header {
+    text-align: center;
+    padding: 20px;
+    border-bottom: 1px solid #444;
+    background-color: #1C2526;
+  }
+  .app-title {
+    font-family: 'Norwester', sans-serif;
+    font-size: 2.5em;
+    font-weight: bold;
+    color: #FF6200;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+  .nav-link {
+    text-decoration: none;
+    color: #FFFFFF;
+    font-size: 1em;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: background-color 0.3s, color 0.3s;
+  }
+  .nav-link:hover {
+    background-color: #FF6200;
+    color: #000000;
+  }
+  .App-main {
+    padding: 30px 0;
+  }
+  .card {
+    background: #1C2526;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2 {
+    font-size: 1.8em;
+    color: #FFFFFF;
+    margin-bottom: 15px;
+    font-weight: 600;
+  }
+  .card h3 {
+    font-size: 1.5em;
+    color: #FFFFFF;
+    margin-bottom: 10px;
+  }
+  .card p {
+    font-size: 1em;
+    color: #FFFFFF;
+    margin-bottom: 15px;
+  }
+  .report-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+  .report-table th,
+  .report-table td {
+    border: 1px solid #555;
+    padding: 10px;
+    text-align: center;
+    color: #FFFFFF;
+  }
+  .report-table th {
+    background-color: #333333;
+    color: #FFFFFF;
+  }
+  @media print {
+    .App-header {
+      display: none !important;
+    }
+    .App-main {
+      padding: 0;
+    }
+    .card {
+      border: none;
+      padding: 0;
+    }
+    .report-table th,
+    .report-table td {
+      border: 1px solid #000;
+      padding: 5px;
+    }
+    .report-table th {
+      background-color: #E0E0E0;
+    }
+  }
+`;
+
 app.get('/report-detailed', async (req, res) => {
   try {
     const { countId } = req.query;
     if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
 
     const count = counts.find(c => c.id === parseInt(countId));
-    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
+    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
 
     const systemData = Array.isArray(count.system_data) ? count.system_data : [];
     const storeData = Array.isArray(count.store_data) ? count.store_data : [];
@@ -319,7 +428,7 @@ app.get('/report-detailed', async (req, res) => {
         <title>Relatório Detalhado - AUDITÊ</title>
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
         <style>
-          ${fs.readFileSync(path.join(__dirname, '../client/src/App.css'), 'utf8')}
+          ${reportStyles}
         </style>
       </head>
       <body>
@@ -332,7 +441,7 @@ app.get('/report-detailed', async (req, res) => {
           </header>
           <main class="App-main">
             <div class="card">
-              <h2>Relatório Detalhado</h2>
+              <h2>RELATÓRIO DETALHADO</h2>
               <p><strong>Título:</strong> ${report.title}</p>
               <p><strong>Data:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
               <h3>Resumo</h3>
@@ -353,8 +462,8 @@ app.get('/report-detailed', async (req, res) => {
                 <tbody>
                   ${report.details.map(item => `
                     <tr>
-                      <td>${item.Código}</td>
-                      <td>${item.Produto}</td>
+                      <td>${item.Código || 'N/A'}</td>
+                      <td>${item.Produto || 'N/A'}</td>
                       <td>${item.Saldo_Estoque}</td>
                       <td>${item.Contado}</td>
                       <td>${item.Diferença}</td>
@@ -381,7 +490,7 @@ app.get('/report-synthetic', async (req, res) => {
     if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
 
     const count = counts.find(c => c.id === parseInt(countId));
-    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
+    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
 
     const systemData = Array.isArray(count.system_data) ? count.system_data : [];
     const storeData = Array.isArray(count.store_data) ? count.store_data : [];
@@ -401,7 +510,7 @@ app.get('/report-synthetic', async (req, res) => {
         <title>Relatório Sintético - AUDITÊ</title>
         <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
         <style>
-          ${fs.readFileSync(path.join(__dirname, '../client/src/App.css'), 'utf8')}
+          ${reportStyles}
         </style>
       </head>
       <body>
@@ -414,7 +523,7 @@ app.get('/report-synthetic', async (req, res) => {
           </header>
           <main class="App-main">
             <div class="card">
-              <h2>Relatório Sintético</h2>
+              <h2>RELATÓRIO SINTÉTICO</h2>
               <p><strong>Título:</strong> ${report.title}</p>
               <p><strong>Data:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
               <h3>Resumo</h3>
@@ -436,8 +545,8 @@ app.get('/report-synthetic', async (req, res) => {
                   <tbody>
                     ${report.details.map(item => `
                       <tr>
-                        <td>${item.Código}</td>
-                        <td>${item.Produto}</td>
+                        <td>${item.Código || 'N/A'}</td>
+                        <td>${item.Produto || 'N/A'}</td>
                         <td>${item.Saldo_Estoque}</td>
                         <td>${item.Contado}</td>
                         <td>${item.Diferença}</td>
@@ -497,8 +606,22 @@ app.get('/health', (req, res) => {
 if (process.env.NODE_ENV === 'production') {
   const staticDir = path.join(__dirname, '../client/build');
   app.use(express.static(staticDir));
+
   app.get('*', (req, res) => {
     try {
+      if (req.path.startsWith('/create-count') ||
+          req.path.startsWith('/count-store') ||
+          req.path.startsWith('/save-count') ||
+          req.path.startsWith('/finalize-count') ||
+          req.path.start
+sWith('/report-detailed') ||
+          req.path.startsWith('/report-synthetic') ||
+          req.path.startsWith('/past-counts') ||
+          req.path.startsWith('/reset') ||
+          req.path.startsWith('/health')) {
+        return res.status(404).json({ error: 'Rota não encontrada' });
+      }
+
       const indexPath = path.join(staticDir, 'index.html');
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
