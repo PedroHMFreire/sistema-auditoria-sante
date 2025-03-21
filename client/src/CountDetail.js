@@ -60,7 +60,6 @@ const CountDetail = () => {
     try {
       const response = await axios.post('/save-count', { countId: id });
       setMessage(response.data.message);
-      // Atualizar o status para "finalized" no backend
       await axios.post('/finalize-count', { countId: id });
       navigate('/past-counts');
     } catch (error) {
@@ -76,33 +75,20 @@ const CountDetail = () => {
     return <div className="card" style={{ color: 'red' }}>{error}</div>;
   }
 
+  // Calcular resumo sintético dos dados do sistema
+  const totalItems = count.system_data?.length || 0;
+  const uniqueProducts = new Set(count.system_data?.map(item => item.product)).size;
+
   return (
     <div className="card">
       <h2>{count.title || 'Contagem sem título'}</h2>
       <p><strong>Data de Criação:</strong> {new Date(count.timestamp).toLocaleString()}</p>
-      <p><strong>Total de Itens no Sistema:</strong> {count.system_data?.length || 0}</p>
 
       {count.system_data?.length > 0 && (
         <div className="card">
-          <h3>Dados do Sistema</h3>
-          <table className="report-table">
-            <thead>
-              <tr>
-                <th>Código</th>
-                <th>Produto</th>
-                <th>Saldo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {count.system_data.map((item, index) => (
-                <tr key={index}>
-                  <td>{item.code}</td>
-                  <td>{item.product}</td>
-                  <td>{item.balance}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <h3>Resumo dos Dados do Sistema</h3>
+          <p><strong>Total de Itens:</strong> {totalItems}</p>
+          <p><strong>Produtos Únicos:</strong> {uniqueProducts}</p>
         </div>
       )}
 
@@ -160,7 +146,7 @@ const CountDetail = () => {
           )}
 
           <div className="count-actions">
-            <button onClick={handleFinalizeCount} className="btn secondary">
+            <button onClick={handleFinalizeCount} className="btn primary">
               Finalizar Contagem
             </button>
           </div>
