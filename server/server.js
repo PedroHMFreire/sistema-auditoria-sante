@@ -39,7 +39,6 @@ async function loadCounts() {
     return JSON.parse(data);
   } catch (error) {
     if (error.code === 'ENOENT') {
-      // Arquivo não existe, retorna array vazio
       return [];
     }
     console.error('Erro ao carregar contagens:', error);
@@ -58,10 +57,6 @@ async function saveCounts(counts) {
 
 // Carregar contagens na inicialização
 let counts = [];
-let systemData = [];
-let storeData = [];
-let countTitle = '';
-
 (async () => {
   counts = await loadCounts();
   console.log('Contagens carregadas:', counts);
@@ -138,7 +133,7 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
       return { code, product, balance };
     }).filter(item => item !== null);
 
-    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada. Verifique se as colunas Código e Produto estão preenchidas.' });
+    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada.' });
 
     const newCount = {
       id: counts.length + 1,
@@ -158,87 +153,13 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
 
     await fs.unlink(req.file.path).catch(err => console.error('Erro ao excluir arquivo:', err));
     res.status(200).json({
-      message: 'Contagem pré-criada com sucesso!',
+      message: 'Contagem criada com sucesso!',
       countId: newCount.id,
       systemData,
     });
   } catch (error) {
     console.error('Erro ao criar contagem:', error);
     res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
-  }
-});
-
-app.post('/load-count', async (req, res) => {
-  try {
-    const { countId } = req.body;
-    const selectedCount = counts.find(count => count.id === parseInt(countId));
-    if (!selectedCount) return res.status(400).json({ error: 'ID inválido' });
-
-    systemData = Array.isArray(selectedCount.system_data) ? selectedCount.system_data : [];
-    storeData = Array.isArray(selectedCount.store_data) ? selectedCount.store_data : [];
-    countTitle = selectedCount.title || '';
-
-    res.status(200).json({ message: 'Contagem carregada!', systemData, storeData, countTitle });
-  } catch (error) {
-    console.error('Erro ao carregar contagem:', error);
-    res.status(500).json({ error: 'Erro ao carregar contagem: ' + error.message });
-  }
-});
-
-app.post('/upload-system-excel', upload.single('file'), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-
-    const workbook = xlsx.readFile(req.file.path);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
-
-    if (rawData.length === 0) return res.status(400).json({ error: 'Planilha vazia' });
-
-    const headers = rawData[0].map(normalizeColumnName);
-    const codeCol = headers.indexOf('codigo');
-    const productCol = headers.indexOf('produto');
-    let balanceCol = headers.indexOf('saldo');
-    if (balanceCol === -1) balanceCol = headers.indexOf('saldo_estoque');
-
-    if (codeCol === -1 || productCol === -1 || balanceCol === -1) {
-      return res.status(400).json({
-        error: 'Formato inválido. Colunas: Código, Produto, Saldo (ou Saldo_Estoque)',
-      });
-    }
-
-    systemData = rawData.slice(1).filter(row => row && row.length > 0).map(row => {
-      const code = extractNumericCode(row[codeCol]);
-      const product = row[productCol] ? String(row[productCol]).trim() : '';
-      const balance = parseFloat(row[balanceCol]) || 0;
-
-      if (!code || !product) return null;
-
-      return { code, product, balance };
-    }).filter(item => item !== null);
-
-    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada. Verifique se as colunas Código e Produto estão preenchidas.' });
-
-    const totalItems = systemData.length;
-    const totalUnits = systemData.reduce((sum, item) => sum + item.balance, 0);
-
-    await fs.unlink(req.file.path).catch(err => console.error('Erro ao excluir arquivo:', err));
-    res.status(200).json({ message: 'Dados carregados!', summary: { totalItems, totalUnits } });
-  } catch (error) {
-    console.error('Erro ao processar planilha:', error);
-    res.status(500).json({ error: 'Erro ao processar planilha: ' + error.message });
-  }
-});
-
-app.post('/set-count-title', async (req, res) => {
-  try {
-    const { title } = req.body;
-    if (!title || typeof title !== 'string') return res.status(400).json({ error: 'Título inválido' });
-    countTitle = title.trim();
-    res.status(200).json({ message: `Título definido como "${countTitle}"` });
-  } catch (error) {
-    console.error('Erro ao definir título:', error);
-    res.status(500).json({ error: 'Erro ao definir título: ' + error.message });
   }
 });
 
@@ -253,10 +174,8 @@ app.post('/count-store', async (req, res) => {
     const count = counts.find(c => c.id === parseInt(countId));
     if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
 
-    storeData = Array.isArray(count.store_data) ? count.store_data : [];
-    storeData.push({ code: extractNumericCode(code), quantity: qty });
-
-    count.store_data = storeData;
+    if (!Array.isArray(count.store_data)) count.store_data = [];
+    count.store_data.push({ code: extractNumericCode(code), quantity: qty });
     count.status = 'created';
     await saveCounts(counts);
 
@@ -275,14 +194,37 @@ app.post('/save-count', async (req, res) => {
     const count = counts.find(c => c.id === parseInt(countId));
     if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
 
-    storeData = Array.isArray(count.store_data) ? count.store_data : [];
-    if (storeData.length === 0) return res.status(400).json({ error: 'Nenhuma contagem para salvar' });
+    if (!Array.isArray(count.store_data) || count.store_data.length === 0) {
+      return res.status(400).json({ error: 'Nenhuma contagem para salvar' });
+    }
 
     await saveCounts(counts);
     res.status(200).json({ message: 'Contagem salva!' });
   } catch (error) {
     console.error('Erro ao salvar contagem:', error);
     res.status(500).json({ error: 'Erro ao salvar contagem: ' + error.message });
+  }
+});
+
+app.post('/finalize-count', async (req, res) => {
+  try {
+    const { countId } = req.body;
+    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
+
+    const count = counts.find(c => c.id === parseInt(countId));
+    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
+
+    const report = generateReport(count.system_data, count.store_data, count.title, false);
+    count.status = 'finalized';
+    count.summary = report.summary;
+    count.details = report.details;
+    count.timestamp = new Date().toISOString(); // Atualiza o timestamp para a data de finalização
+    await saveCounts(counts);
+
+    res.status(200).json({ message: 'Contagem finalizada com sucesso!' });
+  } catch (error) {
+    console.error('Erro ao finalizar contagem:', error);
+    res.status(500).json({ error: 'Erro ao finalizar contagem: ' + error.message });
   }
 });
 
@@ -367,14 +309,7 @@ app.get('/report-detailed', async (req, res) => {
     }
 
     const report = generateReport(systemData, storeData, count.title, false);
-    count.system_data = report.system_data;
-    count.store_data = report.store_data;
-    count.summary = report.summary;
-    count.details = report.details;
-    count.status = report.status;
-    await saveCounts(counts);
 
-    // Renderizar o relatório como HTML
     const html = `
       <!DOCTYPE html>
       <html lang="pt-BR">
@@ -392,7 +327,7 @@ app.get('/report-detailed', async (req, res) => {
           <header class="App-header">
             <h1 class="app-title">AUDITÊ</h1>
             <nav>
-              <a href="/" class="nav-link">Voltar</a>
+              <a href="/past-counts" class="nav-link">Voltar</a>
             </nav>
           </header>
           <main class="App-main">
@@ -456,14 +391,7 @@ app.get('/report-synthetic', async (req, res) => {
     }
 
     const report = generateReport(systemData, storeData, count.title, true);
-    count.system_data = report.system_data;
-    count.store_data = report.store_data;
-    count.summary = report.summary;
-    count.details = report.details;
-    count.status = report.status;
-    await saveCounts(counts);
 
-    // Renderizar o relatório como HTML
     const html = `
       <!DOCTYPE html>
       <html lang="pt-BR">
@@ -481,7 +409,7 @@ app.get('/report-synthetic', async (req, res) => {
           <header class="App-header">
             <h1 class="app-title">AUDITÊ</h1>
             <nav>
-              <a href="/" class="nav-link">Voltar</a>
+              <a href="/past-counts" class="nav-link">Voltar</a>
             </nav>
           </header>
           <main class="App-main">
@@ -548,9 +476,6 @@ app.get('/past-counts', async (req, res) => {
 
 app.post('/reset', async (req, res) => {
   try {
-    systemData = [];
-    storeData = [];
-    countTitle = '';
     counts = [];
     await saveCounts(counts);
     res.status(200).json({ message: 'Dados reiniciados!' });
@@ -562,7 +487,7 @@ app.post('/reset', async (req, res) => {
 
 app.get('/health', (req, res) => {
   try {
-    res.status(200).json({ status: 'ok', systemDataCount: systemData.length, storeDataCount: storeData.length });
+    res.status(200).json({ status: 'ok', counts: counts.length });
   } catch (error) {
     console.error('Erro no endpoint /health:', error);
     res.status(500).json({ error: 'Erro no endpoint de saúde' });
