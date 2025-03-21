@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const CreatedCounts = () => {
   const [counts, setCounts] = useState([]);
@@ -12,9 +12,6 @@ const CreatedCounts = () => {
     const fetchCounts = async () => {
       try {
         const response = await axios.get('/past-counts?status=created');
-        if (!Array.isArray(response.data)) {
-          throw new Error('Resposta do servidor não é um array');
-        }
         setCounts(response.data);
         setLoading(false);
       } catch (err) {
@@ -35,35 +32,23 @@ const CreatedCounts = () => {
 
   return (
     <div className="card">
+      <button onClick={() => navigate(-1)} className="btn-back">
+        Voltar
+      </button>
       <h2>Contagens Criadas</h2>
       {counts.length === 0 ? (
         <p>Nenhuma contagem criada encontrada.</p>
       ) : (
         <ul className="past-counts-list">
-          {counts.map((count) => {
-            const timestamp = count.timestamp
-              ? new Date(count.timestamp).toLocaleString()
-              : 'Data inválida';
-            const totalItems = count.system_data?.length || 0;
-            return (
-              <li key={count.id} className="past-count-item">
-                <h3>
-                  <a
-                    href={`/count/${count.id}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate(`/count/${count.id}`);
-                    }}
-                    className="count-link"
-                  >
-                    {count.title || 'Sem título'}
-                  </a>
-                </h3>
-                <p>Data de Criação: {timestamp}</p>
-                <p>Total de Itens no Sistema: {totalItems}</p>
-              </li>
-            );
-          })}
+          {counts.map((count) => (
+            <li key={count.id} className="past-count-item">
+              <Link to={`/count/${count.id}`} className="count-link">
+                <h3>{count.title || 'Contagem sem título'}</h3>
+              </Link>
+              <p><strong>Data:</strong> {new Date(count.timestamp).toLocaleString()}</p>
+              <p><strong>Total de Itens:</strong> {count.system_data?.length || 0}</p>
+            </li>
+          ))}
         </ul>
       )}
     </div>
