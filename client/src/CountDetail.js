@@ -81,6 +81,9 @@ const CountDetail = () => {
 
   return (
     <div className="card">
+      <button onClick={() => navigate(-1)} className="btn-back">
+        Voltar
+      </button>
       <h2>{count.title || 'Contagem sem título'}</h2>
       <p><strong>Data de Criação:</strong> {new Date(count.timestamp).toLocaleString()}</p>
 
