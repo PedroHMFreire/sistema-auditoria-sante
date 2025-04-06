@@ -151,15 +151,13 @@ nav {
   transform: translateY(-2px);
 }
 
-.btn.remove {
-  background-color: #FF4444;
+.btn.secondary {
+  background-color: #555;
   color: #FFFFFF;
-  padding: 5px 10px;
-  font-size: 0.9em;
 }
 
-.btn.remove:hover {
-  background-color: #CC0000;
+.btn.secondary:hover {
+  background-color: #444;
   transform: translateY(-2px);
 }
 
@@ -228,6 +226,38 @@ nav {
   color: #FFFFFF;
 }
 
+.status-regular {
+  color: #34A853;
+}
+
+.status-excesso {
+  color: #FF6200;
+}
+
+.status-falta {
+  color: #FF4444;
+}
+
+.action-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin: 0 5px;
+  transition: transform 0.1s;
+}
+
+.action-icon:hover {
+  transform: scale(1.2);
+}
+
+.action-icon.edit svg {
+  fill: #FF6200;
+}
+
+.action-icon.remove svg {
+  fill: #FF4444;
+}
+
 .past-counts-list {
   list-style: none;
 }
@@ -266,6 +296,37 @@ nav {
   padding: 15px;
   background: #2C2C2C;
   border-radius: 8px;
+}
+
+.autocomplete {
+  position: relative;
+  width: 100%;
+  max-width: 200px;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #333333;
+  border: 1px solid #555;
+  border-radius: 6px;
+  list-style: none;
+  max-height: 150px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.suggestion-item {
+  padding: 10px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.suggestion-item:hover {
+  background-color: #FF6200;
+  color: #000000;
 }
 
 @media print {
@@ -327,5 +388,8 @@ nav {
   }
   .filter-section .field {
     flex-direction: column;
+  }
+  .autocomplete {
+    max-width: 100%;
   }
 }
