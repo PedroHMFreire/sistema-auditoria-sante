@@ -1,83 +1,93 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 const ActiveCount = () => {
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
+  const [company, setCompany] = useState(''); // Novo campo para empresa
   const [message, setMessage] = useState('');
-  const navigate = useNavigate();
+  const [error, setError] = useState('');
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
   };
 
-  const handleCreateCount = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!file) {
-      setMessage('Por favor, selecione um arquivo.');
+      setError('Por favor, selecione um arquivo.');
       return;
     }
 
     const formData = new FormData();
     formData.append('file', file);
     formData.append('title', title);
+    formData.append('company', company); // Adicionando empresa ao formData
 
     try {
       const response = await axios.post('/create-count-from-excel', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setMessage(response.data.message);
-      setTitle('');
+      setError('');
       setFile(null);
-    } catch (error) {
-      setMessage('Erro ao criar contagem: ' + (error.response?.data?.error || error.message));
+      setTitle('');
+      setCompany(''); // Limpar o campo empresa
+      document.getElementById('file-input').value = '';
+    } catch (err) {
+      setError('Erro ao criar contagem: ' + (err.response?.data?.error || err.message));
+      setMessage('');
     }
   };
 
   return (
-    <>
-      <div className="card">
-        <h2>NOVA CONTAGEM</h2>
-        <form onSubmit={handleCreateCount}>
-          <div className="field">
-            <label>Título da Contagem:</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Digite o título"
-              className="text-input"
-            />
-          </div>
-          <div className="field">
-            <label>Arquivo Excel:</label>
-            <input
-              type="file"
-              accept=".xlsx, .xls"
-              onChange={handleFileChange}
-              className="file-input"
-            />
-          </div>
-          <button type="submit" className="btn primary">CRIAR CONTAGEM</button>
-        </form>
-      </div>
-
-      <div className="count-actions">
-        <button onClick={() => navigate('/created-counts')} className="btn primary">
-          CRIADAS
+    <div className="card">
+      <h2>NOVA CONTAGEM</h2>
+      <form onSubmit={handleSubmit}>
+        <div className="field">
+          <label>Empresa:</label>
+          <input
+            type="text"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder="Digite o nome da empresa"
+            className="text-input"
+          />
+        </div>
+        <div className="field">
+          <label>Título da Contagem:</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Digite o título da contagem"
+            className="text-input"
+          />
+        </div>
+        <div className="field">
+          <label>Arquivo Excel:</label>
+          <input
+            type="file"
+            id="file-input"
+            accept=".xlsx, .xls"
+            onChange={handleFileChange}
+            className="file-input"
+          />
+        </div>
+        <button type="submit" className="btn primary">
+          Criar Contagem
         </button>
-        <button onClick={() => navigate('/past-counts')} className="btn primary">
-          FINALIZADAS
-        </button>
-      </div>
+      </form>
 
-      {message && (
-        <p className="count-info" style={{ color: message.includes('Erro') ? 'red' : '#34A853' }}>
-          {message}
-        </p>
-      )}
-    </>
+      <nav>
+        <Link to="/created-counts" className="category-link">Criadas</Link>
+        <Link to="/past-counts" className="category-link">Finalizadas</Link>
+      </nav>
+
+      {message && <p className="count-info" style={{ color: '#34A853' }}>{message}</p>}
+      {error && <p className="count-info" style={{ color: 'red' }}>{error}</p>}
+    </div>
   );
 };
 
