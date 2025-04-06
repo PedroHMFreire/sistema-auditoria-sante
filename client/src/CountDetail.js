@@ -13,6 +13,9 @@ const CountDetail = () => {
   const [quantity, setQuantity] = useState(1);
   const [message, setMessage] = useState('');
   const [lastAddedProduct, setLastAddedProduct] = useState(null);
+  const [editIndex, setEditIndex] = useState(null);
+  const [editCode, setEditCode] = useState('');
+  const [editQuantity, setEditQuantity] = useState(1);
 
   useEffect(() => {
     const fetchCount = async () => {
@@ -22,7 +25,17 @@ const CountDetail = () => {
         if (!selectedCount) {
           throw new Error('Contagem não encontrada ou não está no status "created".');
         }
-        setCount(selectedCount);
+        // Calcular o status para cada item em store_data
+        const updatedStoreData = selectedCount.store_data.map(item => {
+          const systemItem = selectedCount.system_data.find(sys => sys.code === item.code);
+          const balance = systemItem ? systemItem.balance : 0;
+          const difference = item.quantity - balance;
+          let status = 'Regular';
+          if (difference > 0) status = 'Excesso';
+          else if (difference < 0) status = 'Falta';
+          return { ...item, status };
+        });
+        setCount({ ...selectedCount, store_data: updatedStoreData });
         setIsCounting(selectedCount.store_data?.length > 0);
         setLoading(false);
       } catch (err) {
@@ -49,7 +62,10 @@ const CountDetail = () => {
       setLastAddedProduct({ code, productName: response.data.productName });
       setCount((prev) => ({
         ...prev,
-        store_data: [...(prev.store_data || []), { code, quantity, timestamp: new Date().toISOString() }],
+        store_data: [
+          ...(prev.store_data || []),
+          { code, quantity, timestamp: new Date().toISOString(), status: response.data.status },
+        ],
       }));
       setCode('');
       setQuantity(1);
@@ -74,6 +90,52 @@ const CountDetail = () => {
     } catch (error) {
       setMessage('Erro ao remover item: ' + (error.response?.data?.error || error.message));
     }
+  };
+
+  const handleEditItem = (index) => {
+    const item = count.store_data[index];
+    setEditIndex(index);
+    setEditCode(item.code);
+    setEditQuantity(item.quantity);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      const response = await axios.post('/edit-store-item', {
+        countId: id,
+        index: editIndex,
+        code: editCode,
+        quantity: editQuantity,
+      });
+      setMessage(response.data.message);
+      setLastAddedProduct({ code: editCode, productName: response.data.productName });
+      setCount((prev) => {
+        const updatedStoreData = [...prev.store_data];
+        updatedStoreData[editIndex] = {
+          ...updatedStoreData[editIndex],
+          code: editCode,
+          quantity: editQuantity,
+          status: response.data.status,
+        };
+        return { ...prev, store_data: updatedStoreData };
+      });
+      setEditIndex(null);
+      setEditCode('');
+      setEditQuantity(1);
+
+      // Limpar o aviso transitório após 5 segundos
+      setTimeout(() => {
+        setLastAddedProduct(null);
+      }, 5000);
+    } catch (error) {
+      setMessage('Erro ao editar item: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditIndex(null);
+    setEditCode('');
+    setEditQuantity(1);
   };
 
   const handleFinalizeCount = async () => {
@@ -127,27 +189,54 @@ const CountDetail = () => {
         <>
           <div className="card">
             <h3>Inserir Dados da Loja</h3>
-            <div className="field">
-              <label>Código:</label>
-              <input
-                type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="Digite o código"
-                className="text-input"
-              />
-              <label>Quantidade:</label>
-              <input
-                type="number"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                min="1"
-                className="text-input"
-              />
-              <button onClick={handleCountStore} className="btn primary">
-                Adicionar
-              </button>
-            </div>
+            {editIndex === null ? (
+              <div className="field">
+                <label>Código:</label>
+                <input
+                  type="text"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="Digite o código"
+                  className="text-input"
+                />
+                <label>Quantidade:</label>
+                <input
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  min="1"
+                  className="text-input"
+                />
+                <button onClick={handleCountStore} className="btn primary">
+                  Adicionar
+                </button>
+              </div>
+            ) : (
+              <div className="field">
+                <label>Código:</label>
+                <input
+                  type="text"
+                  value={editCode}
+                  onChange={(e) => setEditCode(e.target.value)}
+                  placeholder="Digite o código"
+                  className="text-input"
+                />
+                <label>Quantidade:</label>
+                <input
+                  type="number"
+                  value={editQuantity}
+                  onChange={(e) => setEditQuantity(e.target.value)}
+                  min="1"
+                  className="text-input"
+                />
+                <button onClick={handleSaveEdit} className="btn primary">
+                  Salvar
+                </button>
+                <button onClick={handleCancelEdit} className="btn secondary">
+                  Cancelar
+                </button>
+              </div>
+            )}
             {lastAddedProduct && (
               <p className="transient-message">
                 Último produto adicionado: {lastAddedProduct.code} - {lastAddedProduct.productName}
@@ -163,6 +252,7 @@ const CountDetail = () => {
                   <tr>
                     <th>Código</th>
                     <th>Quantidade</th>
+                    <th>Status</th>
                     <th>Ação</th>
                   </tr>
                 </thead>
@@ -171,12 +261,27 @@ const CountDetail = () => {
                     <tr key={index}>
                       <td>{item.code}</td>
                       <td>{item.quantity}</td>
+                      <td className={`status-${item.status.toLowerCase()}`}>
+                        {item.status}
+                      </td>
                       <td>
                         <button
-                          onClick={() => handleRemoveItem(index)}
-                          className="btn remove"
+                          onClick={() => handleEditItem(index)}
+                          className="action-icon edit"
+                          title="Editar"
                         >
-                          Remover
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16">
+                            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleRemoveItem(index)}
+                          className="action-icon remove"
+                          title="Remover"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16">
+                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                          </svg>
                         </button>
                       </td>
                     </tr>
