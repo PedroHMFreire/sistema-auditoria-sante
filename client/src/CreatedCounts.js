@@ -10,6 +10,7 @@ const CreatedCounts = () => {
   const [companyFilter, setCompanyFilter] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [isFiltered, setIsFiltered] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -17,7 +18,6 @@ const CreatedCounts = () => {
       try {
         const response = await axios.get('/past-counts?status=created');
         setCounts(response.data);
-        setFilteredCounts(response.data);
         setLoading(false);
       } catch (err) {
         setError('Erro ao carregar contagens: ' + (err.response?.data?.error || err.message));
@@ -27,7 +27,12 @@ const CreatedCounts = () => {
     fetchCounts();
   }, []);
 
-  useEffect(() => {
+  const handleFilter = () => {
+    if (!companyFilter) {
+      alert('Por favor, informe o nome da empresa para filtrar.');
+      return;
+    }
+
     let filtered = counts;
 
     if (companyFilter) {
@@ -46,7 +51,8 @@ const CreatedCounts = () => {
     }
 
     setFilteredCounts(filtered);
-  }, [companyFilter, startDate, endDate, counts]);
+    setIsFiltered(true);
+  };
 
   if (loading) {
     return <div className="card">Carregando...</div>;
@@ -91,22 +97,29 @@ const CreatedCounts = () => {
             className="text-input"
           />
         </div>
+        <button onClick={handleFilter} className="btn primary">
+          Buscar
+        </button>
       </div>
-      {filteredCounts.length === 0 ? (
-        <p>Nenhuma contagem criada encontrada.</p>
+      {isFiltered ? (
+        filteredCounts.length === 0 ? (
+          <p>Nenhuma contagem criada encontrada para os filtros selecionados.</p>
+        ) : (
+          <ul className="past-counts-list">
+            {filteredCounts.map((count) => (
+              <li key={count.id} className="past-count-item">
+                <Link to={`/count/${count.id}`} className="count-link">
+                  <h3>{count.title || 'Contagem sem título'}</h3>
+                </Link>
+                <p><strong>Empresa:</strong> {count.company || 'Sem Empresa'}</p>
+                <p><strong>Data:</strong> {new Date(count.timestamp).toLocaleString()}</p>
+                <p><strong>Total de Itens:</strong> {count.system_data?.length || 0}</p>
+              </li>
+            ))}
+          </ul>
+        )
       ) : (
-        <ul className="past-counts-list">
-          {filteredCounts.map((count) => (
-            <li key={count.id} className="past-count-item">
-              <Link to={`/count/${count.id}`} className="count-link">
-                <h3>{count.title || 'Contagem sem título'}</h3>
-              </Link>
-              <p><strong>Empresa:</strong> {count.company || 'Sem Empresa'}</p>
-              <p><strong>Data:</strong> {new Date(count.timestamp).toLocaleString()}</p>
-              <p><strong>Total de Itens:</strong> {count.system_data?.length || 0}</p>
-            </li>
-          ))}
-        </ul>
+        <p>Por favor, utilize os filtros para buscar contagens criadas.</p>
       )}
     </div>
   );
