@@ -12,6 +12,7 @@ const CountDetail = () => {
   const [code, setCode] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [message, setMessage] = useState('');
+  const [lastAddedProduct, setLastAddedProduct] = useState(null);
 
   useEffect(() => {
     const fetchCount = async () => {
@@ -45,14 +46,33 @@ const CountDetail = () => {
     try {
       const response = await axios.post('/count-store', { code, quantity, countId: id });
       setMessage(response.data.message);
+      setLastAddedProduct({ code, productName: response.data.productName });
       setCount((prev) => ({
         ...prev,
-        store_data: [...(prev.store_data || []), { code, quantity }],
+        store_data: [...(prev.store_data || []), { code, quantity, timestamp: new Date().toISOString() }],
       }));
       setCode('');
       setQuantity(1);
+
+      // Limpar o aviso transitório após 5 segundos
+      setTimeout(() => {
+        setLastAddedProduct(null);
+      }, 5000);
     } catch (error) {
       setMessage('Erro ao adicionar código: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
+  const handleRemoveItem = async (index) => {
+    try {
+      const response = await axios.post('/remove-store-item', { countId: id, index });
+      setMessage(response.data.message);
+      setCount((prev) => ({
+        ...prev,
+        store_data: prev.store_data.filter((_, i) => i !== index),
+      }));
+    } catch (error) {
+      setMessage('Erro ao remover item: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -79,11 +99,15 @@ const CountDetail = () => {
   const totalItems = count.system_data?.length || 0;
   const uniqueProducts = new Set(count.system_data?.map(item => item.product)).size;
 
+  // Ordenar store_data por timestamp (mais recente primeiro)
+  const sortedStoreData = [...(count.store_data || [])].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
   return (
     <div className="card">
       <button onClick={() => navigate(-1)} className="btn-back">
         Voltar
       </button>
+      <p><strong>Empresa:</strong> {count.company || 'Sem Empresa'}</p>
       <h2>{count.title || 'Contagem sem título'}</h2>
       <p><strong>Data de Criação:</strong> {new Date(count.timestamp).toLocaleString()}</p>
 
@@ -124,9 +148,14 @@ const CountDetail = () => {
                 Adicionar
               </button>
             </div>
+            {lastAddedProduct && (
+              <p className="transient-message">
+                Último produto adicionado: {lastAddedProduct.code} - {lastAddedProduct.productName}
+              </p>
+            )}
           </div>
 
-          {count.store_data?.length > 0 && (
+          {sortedStoreData.length > 0 && (
             <div className="card">
               <h3>Dados da Loja</h3>
               <table className="report-table">
@@ -134,13 +163,22 @@ const CountDetail = () => {
                   <tr>
                     <th>Código</th>
                     <th>Quantidade</th>
+                    <th>Ação</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {count.store_data.map((item, index) => (
+                  {sortedStoreData.map((item, index) => (
                     <tr key={index}>
                       <td>{item.code}</td>
                       <td>{item.quantity}</td>
+                      <td>
+                        <button
+                          onClick={() => handleRemoveItem(index)}
+                          className="btn remove"
+                        >
+                          Remover
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
