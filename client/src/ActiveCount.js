@@ -13,22 +13,21 @@ const ActiveCount = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
-    const fetchCompanies = async () => {
-      try {
-        const response = await axios.get('/companies');
-        setCompanies(response.data);
-      } catch (err) {
-        console.error('Erro ao carregar empresas:', err);
-      }
-    };
     fetchCompanies();
   }, []);
 
+  const fetchCompanies = async () => {
+    try {
+      const response = await axios.get('http://localhost:10000/companies');
+      setCompanies(response.data);
+    } catch (err) {
+      console.error('Erro ao carregar empresas:', err);
+    }
+  };
+
   useEffect(() => {
     if (company) {
-      const filtered = companies.filter(c =>
-        c.toLowerCase().includes(company.toLowerCase())
-      );
+      const filtered = companies.filter(c => c.toLowerCase().includes(company.toLowerCase()));
       setFilteredCompanies(filtered);
       setShowSuggestions(true);
     } else {
@@ -37,9 +36,7 @@ const ActiveCount = () => {
     }
   }, [company, companies]);
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-  };
+  const handleFileChange = (e) => setFile(e.target.files[0]);
 
   const handleCompanySelect = (selectedCompany) => {
     setCompany(selectedCompany);
@@ -52,24 +49,20 @@ const ActiveCount = () => {
       setError('Por favor, selecione um arquivo.');
       return;
     }
-
     const formData = new FormData();
     formData.append('file', file);
     formData.append('title', title);
     formData.append('company', company);
-
     try {
-      const response = await axios.post('/create-count-from-excel', formData, {
+      const response = await axios.post('http://localhost:10000/create-count-from-excel', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setMessage(response.data.message);
       setError('');
-      setFile(null);
-      setTitle('');
-      setCompany('');
+      setFile(null); setTitle(''); setCompany('');
       document.getElementById('file-input').value = '';
     } catch (err) {
-      setError('Erro ao criar contagem: ' + (err.response?.data?.error || err.message));
+      setError('Erro ao criar contagem: ' + err.response?.data?.error);
       setMessage('');
     }
   };
@@ -93,13 +86,7 @@ const ActiveCount = () => {
             {showSuggestions && filteredCompanies.length > 0 && (
               <ul className="suggestions-list">
                 {filteredCompanies.map((comp, index) => (
-                  <li
-                    key={index}
-                    onClick={() => handleCompanySelect(comp)}
-                    className="suggestion-item"
-                  >
-                    {comp}
-                  </li>
+                  <li key={index} onClick={() => handleCompanySelect(comp)} className="suggestion-item">{comp}</li>
                 ))}
               </ul>
             )}
@@ -107,34 +94,18 @@ const ActiveCount = () => {
         </div>
         <div className="field">
           <label>Título da Contagem:</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Digite o título da contagem"
-            className="text-input"
-          />
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Digite o título da contagem" className="text-input" />
         </div>
         <div className="field">
           <label>Arquivo Excel:</label>
-          <input
-            type="file"
-            id="file-input"
-            accept=".xlsx, .xls"
-            onChange={handleFileChange}
-            className="file-input"
-          />
+          <input type="file" id="file-input" accept=".xlsx, .xls" onChange={handleFileChange} className="file-input" />
         </div>
-        <button type="submit" className="btn primary">
-          Criar Contagem
-        </button>
+        <button type="submit" className="btn primary">Criar Contagem</button>
       </form>
-
       <nav>
         <Link to="/created-counts" className="category-link">Criadas</Link>
         <Link to="/past-counts" className="category-link">Finalizadas</Link>
       </nav>
-
       {message && <p className="count-info" style={{ color: '#34A853' }}>{message}</p>}
       {error && <p className="count-info" style={{ color: 'red' }}>{error}</p>}
     </div>
