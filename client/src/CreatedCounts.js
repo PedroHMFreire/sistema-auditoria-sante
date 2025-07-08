@@ -14,92 +14,59 @@ const CreatedCounts = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchCounts = async () => {
-      try {
-        const response = await axios.get('/past-counts?status=created');
-        setCounts(response.data);
-        setLoading(false);
-      } catch (err) {
-        setError('Erro ao carregar contagens: ' + (err.response?.data?.error || err.message));
-        setLoading(false);
-      }
-    };
     fetchCounts();
   }, []);
+
+  const fetchCounts = async () => {
+    try {
+      const response = await axios.get('http://localhost:10000/past-counts');
+      setCounts(response.data);
+      setLoading(false);
+    } catch (err) {
+      setError('Erro ao carregar contagens: ' + err.message);
+      setLoading(false);
+    }
+  };
 
   const handleFilter = () => {
     if (!companyFilter) {
       alert('Por favor, informe o nome da empresa para filtrar.');
       return;
     }
-
     let filtered = counts;
-
     if (companyFilter) {
-      filtered = filtered.filter(count =>
-        count.company && count.company.toLowerCase().includes(companyFilter.toLowerCase())
-      );
+      filtered = filtered.filter(count => count.company && count.company.toLowerCase().includes(companyFilter.toLowerCase()));
     }
-
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
-      filtered = filtered.filter(count => {
-        const countDate = new Date(count.timestamp);
-        return countDate >= start && countDate <= end;
-      });
+      filtered = filtered.filter(count => new Date(count.timestamp) >= start && new Date(count.timestamp) <= end);
     }
-
     setFilteredCounts(filtered);
     setIsFiltered(true);
   };
 
-  if (loading) {
-    return <div className="card">Carregando...</div>;
-  }
-
-  if (error) {
-    return <div className="card" style={{ color: 'red' }}>{error}</div>;
-  }
+  if (loading) return <div className="card">Carregando...</div>;
+  if (error) return <div className="card" style={{ color: 'red' }}>{error}</div>;
 
   return (
     <div className="card">
-      <button onClick={() => navigate(-1)} className="btn-back">
-        Voltar
-      </button>
+      <button onClick={() => navigate(-1)} className="btn-back">Voltar</button>
       <h2>Contagens Criadas</h2>
       <div className="filter-section">
         <div className="field">
           <label>Filtrar por Empresa:</label>
-          <input
-            type="text"
-            value={companyFilter}
-            onChange={(e) => setCompanyFilter(e.target.value)}
-            placeholder="Digite o nome da empresa"
-            className="text-input"
-          />
+          <input type="text" value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} placeholder="Digite o nome da empresa" className="text-input" />
         </div>
         <div className="field">
           <label>Data Inicial:</label>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="text-input"
-          />
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-input" />
         </div>
         <div className="field">
           <label>Data Final:</label>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="text-input"
-          />
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-input" />
         </div>
-        <button onClick={handleFilter} className="btn primary">
-          Buscar
-        </button>
+        <button onClick={handleFilter} className="btn primary">Buscar</button>
       </div>
       {isFiltered ? (
         filteredCounts.length === 0 ? (
@@ -118,9 +85,7 @@ const CreatedCounts = () => {
             ))}
           </ul>
         )
-      ) : (
-        <p>Por favor, utilize os filtros para buscar contagens criadas.</p>
-      )}
+      ) : <p>Por favor, utilize os filtros para buscar contagens criadas.</p>}
     </div>
   );
 };
