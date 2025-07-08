@@ -318,12 +318,6 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-if (process.env.NODE_ENV === 'production') {
-  const staticDir = path.join(__dirname, '../client/build');
-  app.use(express.static(staticDir));
-  app.get('*', (req, res) => res.sendFile(path.join(staticDir, 'index.html')));
-}
-
 app.use((err, req, res, next) => {
   console.error('Erro não tratado:', err);
   res.status(500).json({ error: 'Erro interno: ' + err.message });
