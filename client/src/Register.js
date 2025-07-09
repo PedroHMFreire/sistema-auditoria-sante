@@ -12,11 +12,11 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:10000/register', { email, password, company });
+      await axios.post(`${process.env.REACT_APP_API_URL}/register`, { email, password, company });
       setMessage('Registro enviado. Aguarde aprovação.');
       setTimeout(() => navigate('/login'), 2000);
     } catch (error) {
-      setMessage(error.response?.data?.error || 'Erro ao registrar');
+      setMessage(`Erro ao registrar: ${error.response?.data?.error || error.message}`);
     }
   };
 
@@ -38,7 +38,7 @@ const Register = () => {
         </div>
         <button type="submit" className="btn primary">Registrar</button>
       </form>
-      {message && <p className="count-info" style={{ color: 'green' }}>{message}</p>}
+      {message && <p className="count-info" style={{ color: message.includes('Erro') ? 'red' : 'green' }}>{message}</p>}
       <p>Já tem conta? <a href="/login">Faça login</a></p>
     </div>
   );
