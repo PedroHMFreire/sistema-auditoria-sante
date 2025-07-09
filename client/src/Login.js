@@ -11,11 +11,11 @@ const Login = ({ onLogin }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://localhost:10000/login', { email, password });
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/login`, { email, password });
       onLogin(response.data.token);
       navigate('/active-count');
     } catch (error) {
-      setMessage(error.response?.data?.error || 'Erro ao fazer login');
+      setMessage(`Erro ao fazer login: ${error.response?.data?.error || error.message}`);
     }
   };
 
