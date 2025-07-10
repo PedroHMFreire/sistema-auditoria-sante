@@ -83,17 +83,33 @@
       const handleUpload = async () => {
         if (!file) return setMessage('Selecione um arquivo Excel.');
 
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('title', 'Contagem Automática');
-        formData.append('company', 'Empresa Padrão');
+const formData = new FormData();
+formData.append('file', file);
+formData.append('title', 'Contagem Automática');
+formData.append('company', 'Empresa Padrão');
 
-        try {
-          const token = localStorage.getItem('token');
-          const response = await fetch('/create-count-from-excel', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            body: formData,
+try {
+  const token = localStorage.getItem('token');
+  const response = await fetch('https://sistema-audite.onrender.com/create-count-from-excel', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  });
+
+  const resultado = await response.json();
+  
+  if (!response.ok) {
+    throw new Error(resultado.error || 'Erro desconhecido ao enviar a planilha');
+  }
+
+  console.log('Contagem criada:', resultado);
+  alert('Planilha enviada com sucesso!');
+} catch (error) {
+  console.error('Erro ao enviar planilha:', error.message);
+  alert('Erro ao enviar a planilha: ' + error.message);
+  
           });
 
           const data = await response.json();
