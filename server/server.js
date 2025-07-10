@@ -11,11 +11,11 @@ const bcrypt = require('bcrypt');
 const { Sequelize, DataTypes } = require('sequelize');
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' })); // Aumenta limite para JSON grande
+app.use(express.json({ limit: '10mb' }));
 
 // Configuração do banco de dados
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
-  logging: process.env.NODE_ENV !== 'production', // Desativa logs no production
+  logging: process.env.NODE_ENV !== 'production',
 });
 const User = sequelize.define('User', {
   email: { type: DataTypes.STRING, unique: true },
@@ -33,11 +33,10 @@ const Count = sequelize.define('Count', {
   userId: { type: DataTypes.INTEGER, allowNull: false },
 }, { timestamps: true });
 
-// Inicialização assíncrona do banco
 (async () => {
   try {
     await sequelize.authenticate();
-    await sequelize.sync({ alter: true }); // Alter para atualizar schema sem perder dados
+    await sequelize.sync({ alter: true });
     console.log('Conexão com o banco estabelecida com sucesso.');
   } catch (error) {
     console.error('Erro ao conectar ao banco:', error);
@@ -55,7 +54,6 @@ async function initializeUploadDir() {
     console.error('Erro ao inicializar/limpar uploads:', error);
   }
 }
-
 initializeUploadDir();
 
 const storage = multer.diskStorage({
@@ -66,8 +64,9 @@ const storage = multer.diskStorage({
   },
 });
 
-},
-  limits: { fileSize: 10 * 1024 * 1024 }, // Aumenta limite para 10MB
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
 function normalizeColumnName(name) {
@@ -92,7 +91,7 @@ function authenticateToken(req, res, next) {
 app.post('/register', async (req, res) => {
   try {
     const { email, password, company } = req.body;
-    const hashedPassword = await bcrypt.hash(password, 12); // Aumenta rounds para 12
+    const hashedPassword = await bcrypt.hash(password, 12);
     await User.create({ email, password: hashedPassword, company });
     res.status(201).json({ message: 'Registro pendente. Aguarde aprovação.' });
   } catch (error) {
@@ -114,18 +113,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
-app.post('/request-payment', async (req, res) => {
-  try {
-    const { email } = req.body;
-    const user = await User.findOne({ where: { email } });
-    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
-    const pix = 'seu-pix-aqui'; // Substitua por valor dinâmico ou seguro
-    res.json({ message: `Envie R$ 29,90 para ${pix}. Após confirmação, libere o acesso.`, pix });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro na solicitação de pagamento: ' + error.message });
-  }
-});
-
 app.post('/approve-user/:id', async (req, res) => {
   try {
     await User.update({ approved: true }, { where: { id: req.params.id } });
@@ -137,11 +124,17 @@ app.post('/approve-user/:id', async (req, res) => {
 
 app.post('/create-count-from-excel', authenticateToken, upload.single('file'), async (req, res) => {
   try {
+    console.log('Usuário autenticado:', req.user);
+    console.log('Arquivo recebido:', req.file);
+
+    if (!req.user?.id) {
+      return res.status(403).json({ error: 'Usuário não autenticado corretamente' });
+    }
+
     if (!req.file) {
       return res.status(400).json({ error: 'Nenhum arquivo enviado' });
     }
 
-    console.log(`Processando arquivo: ${req.file.path}`);
     const { title, company } = req.body || {};
     const workbook = xlsx.readFile(req.file.path);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -153,7 +146,6 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
     }
 
     const headers = rawData[0].map(normalizeColumnName);
-    console.log('Cabeçalhos detectados:', headers);
     const [codeCol, productCol, balanceCol] = ['codigo', 'produto', 'saldo', 'saldo_estoque']
       .map(h => headers.indexOf(h))
       .filter(i => i !== -1);
@@ -169,7 +161,6 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
         const code = extractNumericCode(row[codeCol]);
         const product = (row[productCol] || '').toString().trim();
         const balance = parseFloat(row[balanceCol]) || 0;
-        console.log(`Linha processada: { code: ${code}, product: ${product}, balance: ${balance} }`);
         return code && product ? { code, product, balance } : null;
       })
       .filter(Boolean);
@@ -196,168 +187,8 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
   }
 });
 
-app.post('/count-store', authenticateToken, async (req, res) => {
-  try {
-    const { code, quantity, countId } = req.body;
-    const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
-
-    const qty = parseInt(quantity, 10) || 1;
-    count.store_data = count.store_data || [];
-    count.store_data.push({ code: extractNumericCode(code), quantity: qty, timestamp: new Date().toISOString() });
-    await count.save();
-
-    const systemItem = count.system_data.find(item => item.code === extractNumericCode(code));
-    res.status(200).json({
-      message: `Código ${code} adicionado`,
-      productName: systemItem?.product || 'Produto desconhecido',
-      status: getStatus(systemItem?.balance, qty),
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao adicionar código: ' + error.message });
-  }
-});
-
-function getStatus(expected, counted) {
-  const diff = counted - (expected || 0);
-  return diff > 0 ? 'Excesso' : diff < 0 ? 'Falta' : 'Regular';
-}
-
-// Outros endpoints (remove-store-item, edit-store-item, save-count, finalize-count) seguem padrão similar, otimizados abaixo
-
-app.post('/remove-store-item', authenticateToken, async (req, res) => {
-  try {
-    const { countId, index } = req.body;
-    const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count || !count.store_data?.[index]) return res.status(404).json({ error: 'Item não encontrado' });
-    count.store_data.splice(index, 1);
-    await count.save();
-    res.status(200).json({ message: 'Item removido' });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao remover item: ' + error.message });
-  }
-});
-
-app.post('/edit-store-item', authenticateToken, async (req, res) => {
-  try {
-    const { countId, index, code, quantity } = req.body;
-    const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count || !count.store_data?.[index]) return res.status(404).json({ error: 'Item não encontrado' });
-    const qty = parseInt(quantity, 10) || 1;
-    count.store_data[index] = { code: extractNumericCode(code), quantity: qty, timestamp: new Date().toISOString() };
-    await count.save();
-    const systemItem = count.system_data.find(item => item.code === extractNumericCode(code));
-    res.status(200).json({
-      message: `Item ${code} editado`,
-      productName: systemItem?.product || 'Produto desconhecido',
-      status: getStatus(systemItem?.balance, qty),
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao editar item: ' + error.message });
-  }
-});
-
-app.post('/save-count', authenticateToken, async (req, res) => {
-  try {
-    const { countId } = req.body;
-    const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
-    await count.save();
-    res.status(200).json({ message: 'Contagem salva' });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao salvar contagem: ' + error.message });
-  }
-});
-
-app.post('/finalize-count', authenticateToken, async (req, res) => {
-  try {
-    const { countId } = req.body;
-    const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
-    const report = generateReport(count.system_data, count.store_data, count.title, false);
-    Object.assign(count, { status: 'finalized', summary: report.summary, details: report.details, timestamp: new Date() });
-    await count.save();
-    res.status(200).json({ message: 'Contagem finalizada' });
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao finalizar contagem: ' + error.message });
-  }
-});
-
-function generateReport(systemData, storeData, countTitle, filterDifferences) {
-  const storeCount = storeData.reduce((acc, { code, quantity }) => {
-    acc[code] = (acc[code] || 0) + quantity;
-    return acc;
-  }, {});
-  const summary = { totalProductsInExcess: 0, totalProductsMissing: 0, totalProductsRegular: 0 };
-  const details = systemData.map(item => {
-    const counted = storeCount[item.code] || 0;
-    const expected = item.balance || 0;
-    const diff = counted - expected;
-    if (diff === 0) summary.totalProductsRegular++;
-    else if (diff > 0) summary.totalProductsInExcess += diff;
-    else summary.totalProductsMissing += Math.abs(diff);
-    return { Código: item.code, Produto: item.product, Saldo_Estoque: expected, Contado: counted, Diferença: diff };
-  });
-  Object.keys(storeCount).forEach(code => {
-    if (!systemData.some(item => item.code === code)) {
-      const counted = storeCount[code];
-      summary.totalProductsInExcess += counted;
-      details.push({ Código: code, Produto: 'Desconhecido', Saldo_Estoque: 0, Contado: counted, Diferença: counted });
-    }
-  });
-  if (filterDifferences) details = details.filter(item => item.Diferença !== 0);
-  return { title: countTitle, timestamp: new Date(), summary, details, status: 'finalized' };
-}
-
-app.get('/report-detailed', authenticateToken, async (req, res) => {
-  try {
-    const { countId } = req.query;
-    const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
-    const report = generateReport(count.system_data, count.store_data, count.title, false);
-    res.status(200).json(report); // Retorna JSON em vez de HTML temporário
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
-  }
-});
-
-app.get('/report-synthetic', authenticateToken, async (req, res) => {
-  try {
-    const { countId } = req.query;
-    const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
-    const report = generateReport(count.system_data, count.store_data, count.title, true);
-    res.status(200).json(report);
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
-  }
-});
-
-app.get('/past-counts', authenticateToken, async (req, res) => {
-  try {
-    const counts = await Count.findAll({ where: { userId: req.user.id }, order: [['timestamp', 'DESC']] });
-    res.status(200).json(counts);
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao listar contagens: ' + error.message });
-  }
-});
-
-app.get('/companies', authenticateToken, async (req, res) => {
-  try {
-    const companies = await User.findAll({ where: { approved: true }, attributes: ['company'], raw: true });
-    res.status(200).json([...new Set(companies.map(c => c.company).filter(c => c && c !== 'Sem Empresa'))]);
-  } catch (error) {
-    res.status(500).json({ error: 'Erro ao listar empresas: ' + error.message });
-  }
-});
-
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', uptime: process.uptime() });
-});
-
-app.use((err, req, res, next) => {
-  console.error('Erro não tratado:', err.stack);
-  res.status(err.status || 500).json({ error: err.message || 'Erro interno do servidor' });
 });
 
 app.listen(port, () => console.log(`Servidor rodando na porta ${port}`));
