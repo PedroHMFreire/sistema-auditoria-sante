@@ -1,3 +1,4 @@
+/* Reset básico */
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -5,9 +6,80 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #f9f9f9;
 }
 
+/* Código */
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+/* === Loading Screen Styles === */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  text-align: center;
+  background: linear-gradient(135deg, #fff, #f0f0f0);
+  padding: 20px;
+}
+
+.loading-logo {
+  width: 100px;
+  height: 100px;
+  animation: pulse 1.8s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.7;
+  }
+}
+
+.loading-slogan {
+  font-size: 1.4rem;
+  color: #333;
+  margin-top: 1rem;
+  font-weight: 500;
+}
+
+/* Loader visual animado */
+.loader {
+  margin-top: 20px;
+  width: 40px;
+  height: 40px;
+  border: 4px solid #ff6200;
+  border-top: 4px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsividade */
+@media (max-width: 600px) {
+  .loading-slogan {
+    font-size: 1rem;
+  }
+
+  .loading-logo {
+    width: 80px;
+    height: 80px;
+  }
+
+  .loader {
+    width: 30px;
+    height: 30px;
+  }
 }
