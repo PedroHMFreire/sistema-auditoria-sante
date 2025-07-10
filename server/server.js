@@ -185,7 +185,8 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
 
     const createdCount = await Count.create(newCount);
     await fs.unlink(req.file.path);
-    res.status(201).json({ message: 'Contagem criada com sucesso', countId: createdCount.id, itemCount: systemData.length });
+ res.status(201).json({ message: 'Contagem criada com sucesso', count: createdCount });
+ itemCount: systemData.length });
   } catch (error) {
     console.error('Erro ao criar contagem:', error.stack);
     if (req.file?.path) await fs.unlink(req.file.path).catch(err => console.error('Erro ao deletar arquivo:', err));
