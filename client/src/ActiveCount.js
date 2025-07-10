@@ -39,7 +39,7 @@ useEffect(() => {
   fetchCompanies();
 }, []);
 
-  use(() => {
+  useEffect(() => {
     if (company) {
       const filtered = companies.filter(c =>
         typeof c === 'string' && c.toLowerCase().includes(company.toLowerCase())
