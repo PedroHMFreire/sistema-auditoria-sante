@@ -21,7 +21,7 @@ const ActiveCount = () => {
         const response = await axios.get(`${API_URL}/companies`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setCompanies(response.data);
+        setCompanies(response.data || []);
       } catch (err) {
         console.error('Erro ao carregar empresas:', err);
       }
@@ -32,7 +32,7 @@ const ActiveCount = () => {
   useEffect(() => {
     if (company) {
       const filtered = companies.filter(c =>
-        c.toLowerCase().includes(company.toLowerCase())
+        typeof c === 'string' && c.toLowerCase().includes(company.toLowerCase())
       );
       setFilteredCompanies(filtered);
       setShowSuggestions(true);
@@ -98,19 +98,22 @@ const ActiveCount = () => {
               className="text-input"
               onFocus={() => company && setShowSuggestions(true)}
               onBlur={(e) => {
-  const currentTarget = e.currentTarget;
-  setTimeout(() => {
-    if (!currentTarget.contains(document.activeElement)) {
-      setShowSuggestions(false);
-    }
-  }, 200);
-}}
-
+                const currentTarget = e.currentTarget;
+                setTimeout(() => {
+                  if (!currentTarget.contains(document.activeElement)) {
+                    setShowSuggestions(false);
+                  }
+                }, 200);
+              }}
             />
-            {showSuggestions && filteredCompanies.length > 0 && (
+            {showSuggestions && Array.isArray(filteredCompanies) && filteredCompanies.length > 0 && (
               <ul className="suggestions-list">
                 {filteredCompanies.map((comp, index) => (
-                  <li key={index} onClick={() => handleCompanySelect(comp)} className="suggestion-item">
+                  <li
+                    key={index}
+                    onMouseDown={() => handleCompanySelect(comp)}
+                    className="suggestion-item"
+                  >
                     {comp}
                   </li>
                 ))}
