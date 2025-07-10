@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 
+const API_URL = process.env.REACT_APP_API_URL;
+
 const ActiveCount = () => {
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
@@ -11,46 +13,44 @@ const ActiveCount = () => {
   const [companies, setCompanies] = useState([]);
   const [filteredCompanies, setFilteredCompanies] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-
-  const API_URL = 'https://sistema-audite.onrender.com';
-
-useEffect(() => {
-  const fetchCompanies = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/companies`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      const validCompanies = Array.isArray(response.data)
-        ? response.data.filter(c => typeof c === 'string')
-        : [];
-
-      console.log('Empresas recebidas da API:', response.data);
-      console.log('Empresas filtradas:', validCompanies);
-
-      setCompanies(validCompanies);
-    } catch (err) {
-      console.error('Erro ao carregar empresas:', err);
-      setCompanies([]);
-    }
-  };
-
-  fetchCompanies();
-}, []);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (company) {
-      const filtered = companies.filter(c =>
-        typeof c === 'string' && c.toLowerCase().includes(company.toLowerCase())
-      );
-      setFilteredCompanies(filtered);
-      setShowSuggestions(true);
-    } else {
-      setFilteredCompanies([]);
-      setShowSuggestions(false);
-    }
-  }, [company, companies]);
+    const fetchCompanies = async () => {
+      setIsLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_URL}/companies`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setCompanies(response.data || []);
+      } catch (err) {
+        setError('Erro ao carregar empresas.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchCompanies();
+  }, []);
+
+  const debounce = (func, delay) => {
+    let timeoutId;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func(...args), delay);
+    };
+  };
+
+  const filterCompanies = debounce((value) => {
+    const filtered = companies.filter(c => c.toLowerCase().includes(value.toLowerCase()));
+    setFilteredCompanies(filtered);
+    setShowSuggestions(true);
+  }, 300);
+
+  useEffect(() => {
+    if (company) filterCompanies(company);
+    else setShowSuggestions(false);
+  }, [company]);
 
   const handleFileChange = (e) => setFile(e.target.files[0]);
 
@@ -61,9 +61,10 @@ useEffect(() => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!file) {
-      setError('Por favor, selecione um arquivo.');
+    setMessage('');
+    setError('');
+    if (!file || !title || !company) {
+      setError('Todos os campos devem ser preenchidos.');
       return;
     }
 
@@ -76,26 +77,26 @@ useEffect(() => {
       const token = localStorage.getItem('token');
       const response = await axios.post(`${API_URL}/create-count-from-excel`, formData, {
         headers: {
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`,
         },
       });
-
-      setMessage(response.data.message || 'Contagem criada com sucesso.');
-      setError('');
-      setFile(null);
-      setTitle('');
-      setCompany('');
+      setMessage(response.data.message);
+      setFile(null); setTitle(''); setCompany('');
       document.getElementById('file-input').value = '';
     } catch (err) {
-      setError('Erro ao criar contagem: ' + (err.response?.data?.error || err.message));
-      setMessage('');
+      setError(err.response?.data?.error || 'Erro ao criar contagem.');
     }
   };
 
   return (
     <div className="card">
       <h2>NOVA CONTAGEM</h2>
+
+      {isLoading && <p>Carregando empresas...</p>}
+      {message && <p style={{ color: '#34A853', fontWeight: 'bold' }}>{message}</p>}
+      {error && <p style={{ color: 'red', fontWeight: 'bold' }}>{error}</p>}
+
       <form onSubmit={handleSubmit}>
         <div className="field">
           <label>Empresa:</label>
@@ -104,29 +105,20 @@ useEffect(() => {
               type="text"
               value={company}
               onChange={(e) => setCompany(e.target.value)}
+              onFocus={() => company && setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
               placeholder="Digite o nome da empresa"
               className="text-input"
-              onFocus={() => company && setShowSuggestions(true)}
-              onBlur={(e) => {
-                const currentTarget = e.currentTarget;
-                setTimeout(() => {
-                  if (!currentTarget.contains(document.activeElement)) {
-                    setShowSuggestions(false);
-                  }
-                }, 200);
-              }}
             />
-            {showSuggestions && Array.isArray(filteredCompanies) && filteredCompanies.length > 0 && (
+            {showSuggestions && (
               <ul className="suggestions-list">
-                {filteredCompanies.map((comp, index) => (
-                  <li
-                    key={index}
-                    onMouseDown={() => handleCompanySelect(comp)}
-                    className="suggestion-item"
-                  >
-                    {comp}
-                  </li>
-                ))}
+                {filteredCompanies.length > 0 ? (
+                  filteredCompanies.map((comp, index) => (
+                    <li key={index} onClick={() => handleCompanySelect(comp)} className="suggestion-item">{comp}</li>
+                  ))
+                ) : (
+                  <li className="suggestion-item">Nenhuma empresa encontrada</li>
+                )}
               </ul>
             )}
           </div>
@@ -161,9 +153,6 @@ useEffect(() => {
         <Link to="/created-counts" className="category-link">Criadas</Link>
         <Link to="/past-counts" className="category-link">Finalizadas</Link>
       </nav>
-
-      {message && <p className="count-info" style={{ color: '#34A853' }}>{message}</p>}
-      {error && <p className="count-info" style={{ color: 'red' }}>{error}</p>}
     </div>
   );
 };
