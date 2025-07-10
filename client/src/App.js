@@ -15,22 +15,24 @@ const App = () => {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
+
     if (token) {
-      axios.defaults.headers.Authorization = `Bearer ${token}`;
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setIsAuthenticated(true);
-      // Carregar dados do usuário (opcional)
+      // Opcional: buscar dados do usuário
+      // axios.get('/me').then(res => setUser(res.data)).catch(() => handleLogout());
     }
   }, []);
 
   const handleLogin = (token) => {
     localStorage.setItem('token', token);
-    axios.defaults.headers.Authorization = `Bearer ${token}`;
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     setIsAuthenticated(true);
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    axios.defaults.headers.Authorization = null;
+    delete axios.defaults.headers.common['Authorization'];
     setIsAuthenticated(false);
     setUser(null);
   };
@@ -40,8 +42,14 @@ const App = () => {
       <div className="App">
         <header className="App-header">
           <h1 className="app-title">AUDITÊ</h1>
-          {isAuthenticated && <button onClick={handleLogout} className="btn secondary">Sair</button>}
+          {isAuthenticated && (
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              {user?.email && <span className="user-info">Olá, {user.email}</span>}
+              <button onClick={handleLogout} className="btn secondary">Sair</button>
+            </div>
+          )}
         </header>
+
         <main className="App-main">
           <Routes>
             <Route path="/login" element={!isAuthenticated ? <Login onLogin={handleLogin} /> : <Navigate to="/" />} />
