@@ -1,14 +1,16 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { AuthContext } from './context/AuthContext';
 
-const Login = ({ onLogin }) => {
+const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const emailInputRef = useRef(null);
   const navigate = useNavigate();
+  const { login } = useContext(AuthContext); // ✅ novo
 
   useEffect(() => {
     if (emailInputRef.current) emailInputRef.current.focus();
@@ -29,7 +31,7 @@ const Login = ({ onLogin }) => {
         password
       });
 
-      onLogin(response.data.token);
+      login(response.data.token); // ✅ chama o login do contexto
       setMessage('');
       navigate('/active-count');
     } catch (error) {
