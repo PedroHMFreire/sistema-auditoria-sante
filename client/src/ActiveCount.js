@@ -136,12 +136,19 @@ const ActiveCount = () => {
               onFocus={() => company && setShowSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
             />
-            {showSuggestions && filteredCompanies.length > 0 && (
-              <ul className="suggestions-list">
-                {filteredCompanies.map((comp, index) => (
-                  <li key={index} onClick={() => handleCompanySelect(comp)} className="suggestion-item">{comp}</li>
-                ))}
-              </ul>
+{showSuggestions && Array.isArray(filteredCompanies) && filteredCompanies.length > 0 && (
+  <ul className="suggestions-list">
+    {filteredCompanies.map((comp, index) => (
+      <li
+        key={index}
+        onClick={() => handleCompanySelect(comp)}
+        className="suggestion-item"
+      >
+        {comp}
+      </li>
+    ))}
+  </ul>
+
             )}
           </div>
         </div>
