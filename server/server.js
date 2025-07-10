@@ -68,10 +68,15 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  fileFilter: (req, file, cb) => {
-    const isExcel = file.mimetype.includes('excel') || ['.xlsx', '.xls'].includes(path.extname(file.originalname).toLowerCase());
-    cb(isExcel ? null : new Error('Apenas arquivos Excel (.xlsx, .xls) são permitidos'), isExcel);
-  },
+ fileFilter: (req, file, cb) => {
+  const allowedTypes = [
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  ];
+  const ext = path.extname(file.originalname).toLowerCase();
+  const isExcel = allowedTypes.includes(file.mimetype) || ['.xls', '.xlsx'].includes(ext);
+  cb(isExcel ? null : new Error('Apenas arquivos Excel (.xlsx, .xls) são permitidos'), isExcel);
+},
   limits: { fileSize: 10 * 1024 * 1024 }, // Aumenta limite para 10MB
 });
 
