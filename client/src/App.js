@@ -1,68 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
-import axios from 'axios';
-import Login from './Login';
-import Register from './Register';
-import Admin from './Admin';
-import CountDetail from './CountDetail';
-import CreatedCounts from './CreatedCounts';
-import ActiveCount from './ActiveCount';
+import React from 'react';
+import { BrowserRouter as Router } from 'react-router-dom';
+import AppRoutes from './routes/AppRoutes';
+import { AuthProvider, AuthContext } from './context/AuthContext';
 import './App.css';
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setIsAuthenticated(true);
-      // Opcional: buscar dados do usuário
-      // axios.get('/me').then(res => setUser(res.data)).catch(() => handleLogout());
-    }
-  }, []);
-
-  const handleLogin = (token) => {
-    localStorage.setItem('token', token);
-    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    setIsAuthenticated(true);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    delete axios.defaults.headers.common['Authorization'];
-    setIsAuthenticated(false);
-    setUser(null);
-  };
-
   return (
-    <Router>
-      <div className="App">
-        <header className="App-header">
-          <h1 className="app-title">AUDITÊ</h1>
-          {isAuthenticated && (
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              {user?.email && <span className="user-info">Olá, {user.email}</span>}
-              <button onClick={handleLogout} className="btn secondary">Sair</button>
-            </div>
-          )}
-        </header>
-
-        <main className="App-main">
-          <Routes>
-            <Route path="/login" element={!isAuthenticated ? <Login onLogin={handleLogin} /> : <Navigate to="/" />} />
-            <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/" />} />
-            <Route path="/admin" element={isAuthenticated ? <Admin /> : <Navigate to="/login" />} />
-            <Route path="/count/:id" element={isAuthenticated ? <CountDetail /> : <Navigate to="/login" />} />
-            <Route path="/created-counts" element={isAuthenticated ? <CreatedCounts /> : <Navigate to="/login" />} />
-            <Route path="/active-count" element={isAuthenticated ? <ActiveCount /> : <Navigate to="/login" />} />
-            <Route path="/" element={isAuthenticated ? <Navigate to="/active-count" /> : <Navigate to="/login" />} />
-          </Routes>
-        </main>
-      </div>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <div className="App">
+          <header className="App-header">
+            <h1 className="app-title">AUDITÊ</h1>
+            <AuthContext.Consumer>
+              {({ isAuthenticated, logout, user }) =>
+                isAuthenticated && (
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    {user?.email && <span className="user-info">Olá, {user.email}</span>}
+                    <button onClick={logout} className="btn secondary">Sair</button>
+                  </div>
+                )
+              }
+            </AuthContext.Consumer>
+          </header>
+          <main className="App-main">
+            <AppRoutes />
+          </main>
+        </div>
+      </Router>
+    </AuthProvider>
   );
 };
 
