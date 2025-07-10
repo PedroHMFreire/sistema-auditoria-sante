@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import './App.css';
+import './ActiveCount.css';
+import Lottie from 'lottie-react';
+import successAnimation from './animations/success.json';
+
+const API_URL = process.env.REACT_APP_API_URL || '';
 
 const ActiveCount = () => {
   const [file, setFile] = useState(null);
@@ -12,13 +16,15 @@ const ActiveCount = () => {
   const [companies, setCompanies] = useState([]);
   const [filteredCompanies, setFilteredCompanies] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState(null);
 
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/companies`, {
+        const response = await axios.get(`${API_URL}/companies`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setCompanies(response.data || []);
@@ -26,14 +32,19 @@ const ActiveCount = () => {
         console.error('Erro ao carregar empresas:', err);
       }
     };
+
     fetchCompanies();
   }, []);
 
   useEffect(() => {
     if (company) {
-      const filtered = companies.filter(c => c.toLowerCase().includes(company.toLowerCase()));
-      setFilteredCompanies(filtered);
-      setShowSuggestions(true);
+      if (typingTimeout) clearTimeout(typingTimeout);
+      const timeout = setTimeout(() => {
+        const filtered = companies.filter(c => c.toLowerCase().includes(company.toLowerCase()));
+        setFilteredCompanies(filtered);
+        setShowSuggestions(true);
+      }, 300);
+      setTypingTimeout(timeout);
     } else {
       setFilteredCompanies([]);
       setShowSuggestions(false);
@@ -53,29 +64,33 @@ const ActiveCount = () => {
       setError('Por favor, selecione um arquivo.');
       return;
     }
+    setLoading(true);
+    setError('');
     const formData = new FormData();
     formData.append('file', file);
     formData.append('title', title);
     formData.append('company', company);
+
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/create-count-from-excel`, formData, {
+      const response = await axios.post(`${API_URL}/create-count-from-excel`, formData, {
         headers: {
+          'Content-Type': 'multipart/form-data',
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
         },
       });
+
       setMessage(response.data.message);
-      setError('');
       setFile(null);
       setTitle('');
       setCompany('');
       document.getElementById('file-input').value = '';
-      setShowSuccessAnimation(true);
-      setTimeout(() => setShowSuccessAnimation(false), 3000);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      setError('Erro ao criar contagem: ' + (err.response?.data?.error || 'Erro desconhecido'));
-      setMessage('');
+      setError('Erro ao criar contagem: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -112,7 +127,9 @@ const ActiveCount = () => {
           <label>Arquivo Excel:</label>
           <input type="file" id="file-input" accept=".xlsx, .xls" onChange={handleFileChange} className="file-input" />
         </div>
-        <button type="submit" className="btn primary">Criar Contagem</button>
+        <button type="submit" className="btn primary" disabled={loading}>
+          {loading ? 'Enviando...' : 'Criar Contagem'}
+        </button>
       </form>
       <nav>
         <Link to="/created-counts" className="category-link">Criadas</Link>
@@ -120,7 +137,7 @@ const ActiveCount = () => {
       </nav>
       {message && <p className="count-info" style={{ color: '#34A853' }}>{message}</p>}
       {error && <p className="count-info" style={{ color: 'red' }}>{error}</p>}
-      {showSuccessAnimation && <div className="success-animation">✔ Contagem criada com sucesso!</div>}
+      {success && <Lottie animationData={successAnimation} loop={false} style={{ width: 200, margin: '0 auto' }} />}
     </div>
   );
 };
