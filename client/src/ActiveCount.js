@@ -26,7 +26,7 @@ const ActiveCount = () => {
         const response = await axios.get(`${API_URL}/companies`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setCompanies(response.data || []);
+        setCompanies(Array.isArray(response.data) ? response.data : []);
       } catch (err) {
         console.error('Erro ao carregar empresas:', err);
       }
@@ -38,7 +38,7 @@ const ActiveCount = () => {
         const response = await axios.get(`${API_URL}/counts/active`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setCounts(response.data || []);
+        setCounts(Array.isArray(response.data) ? response.data : []);
       } catch (err) {
         console.error('Erro ao carregar contagens:', err);
       }
@@ -51,13 +51,19 @@ const ActiveCount = () => {
   useEffect(() => {
     if (company) {
       if (typingTimeout) clearTimeout(typingTimeout);
+
       const timeout = setTimeout(() => {
-        const filtered = companies.filter(c =>
-          c.toLowerCase().includes(company.toLowerCase())
-        );
-        setFilteredCompanies(filtered);
+        if (Array.isArray(companies)) {
+          const filtered = companies.filter(c =>
+            typeof c === 'string' && c.toLowerCase().includes(company.toLowerCase())
+          );
+          setFilteredCompanies(filtered);
+        } else {
+          setFilteredCompanies([]);
+        }
         setShowSuggestions(true);
       }, 300);
+
       setTypingTimeout(timeout);
     } else {
       setFilteredCompanies([]);
@@ -78,6 +84,7 @@ const ActiveCount = () => {
       setError('Por favor, selecione um arquivo.');
       return;
     }
+
     setLoading(true);
     setError('');
     const formData = new FormData();
@@ -136,30 +143,44 @@ const ActiveCount = () => {
               onFocus={() => company && setShowSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
             />
-{showSuggestions && Array.isArray(filteredCompanies) && filteredCompanies.length > 0 && (
-  <ul className="suggestions-list">
-    {filteredCompanies.map((comp, index) => (
-      <li
-        key={index}
-        onClick={() => handleCompanySelect(comp)}
-        className="suggestion-item"
-      >
-        {comp}
-      </li>
-    ))}
-  </ul>
-
+            {showSuggestions && Array.isArray(filteredCompanies) && filteredCompanies.length > 0 && (
+              <ul className="suggestions-list">
+                {filteredCompanies.map((comp, index) => (
+                  <li
+                    key={index}
+                    onClick={() => handleCompanySelect(comp)}
+                    className="suggestion-item"
+                  >
+                    {comp}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </div>
+
         <div className="field">
           <label>Título da Contagem:</label>
-          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Digite o título da contagem" className="text-input" />
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Digite o título da contagem"
+            className="text-input"
+          />
         </div>
+
         <div className="field">
           <label>Arquivo Excel:</label>
-          <input type="file" id="file-input" accept=".xlsx, .xls" onChange={handleFileChange} className="file-input" />
+          <input
+            type="file"
+            id="file-input"
+            accept=".xlsx, .xls"
+            onChange={handleFileChange}
+            className="file-input"
+          />
         </div>
+
         <button type="submit" className="btn primary" disabled={loading}>
           {loading ? 'Enviando...' : 'Criar Contagem'}
         </button>
@@ -170,7 +191,7 @@ const ActiveCount = () => {
 
       <h3>Contagens em andamento</h3>
       <ul className="count-list">
-        {counts.map(count => (
+        {Array.isArray(counts) && counts.length > 0 && counts.map(count => (
           <li key={count.id} className="count-item">
             <div>
               <strong>{count.title}</strong> — {count.company}
