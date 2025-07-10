@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import './ActiveCount.css';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
@@ -16,6 +16,8 @@ const ActiveCount = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [typingTimeout, setTypingTimeout] = useState(null);
+  const [counts, setCounts] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchCompanies = async () => {
@@ -30,7 +32,20 @@ const ActiveCount = () => {
       }
     };
 
+    const fetchCounts = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_URL}/counts/active`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setCounts(response.data || []);
+      } catch (err) {
+        console.error('Erro ao carregar contagens:', err);
+      }
+    };
+
     fetchCompanies();
+    fetchCounts();
   }, []);
 
   useEffect(() => {
@@ -84,10 +99,24 @@ const ActiveCount = () => {
       setTitle('');
       setCompany('');
       document.getElementById('file-input').value = '';
+      const newCount = response.data.count;
+      if (newCount) setCounts([newCount, ...counts]);
     } catch (err) {
       setError('Erro ao criar contagem: ' + (err.response?.data?.error || err.message));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFinalize = async (countId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_URL}/counts/${countId}/finalize`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setCounts(counts.filter(c => c.id !== countId));
+    } catch (err) {
+      console.error('Erro ao finalizar contagem:', err);
     }
   };
 
@@ -128,12 +157,24 @@ const ActiveCount = () => {
           {loading ? 'Enviando...' : 'Criar Contagem'}
         </button>
       </form>
-      <nav>
-        <Link to="/created-counts" className="category-link">Criadas</Link>
-        <Link to="/past-counts" className="category-link">Finalizadas</Link>
-      </nav>
+
       {message && <p className="count-info" style={{ color: '#34A853' }}>{message}</p>}
       {error && <p className="count-info" style={{ color: 'red' }}>{error}</p>}
+
+      <h3>Contagens em andamento</h3>
+      <ul className="count-list">
+        {counts.map(count => (
+          <li key={count.id} className="count-item">
+            <div>
+              <strong>{count.title}</strong> — {count.company}
+            </div>
+            <div>
+              <button onClick={() => navigate(`/count/${count.id}`)} className="btn small">Abrir</button>
+              <button onClick={() => handleFinalize(count.id)} className="btn small danger">Finalizar</button>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 };
