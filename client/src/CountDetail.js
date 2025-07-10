@@ -103,13 +103,19 @@ const CountDetail = () => {
   const handleCancelEdit = () => { setEditIndex(null); setEditCode(''); setEditQuantity(1); };
 
   const handleFinalizeCount = async () => {
-    try {
-      await axios.post('http://localhost:10000/save-count', { countId: id });
-      await axios.post('http://localhost:10000/finalize-count', { countId: id });
-      navigate('/past-counts');
-    } catch (error) {
-      setMessage('Erro ao finalizar contagem: ' + error.response?.data?.error);
-    }
+  if (!window.confirm("Tem certeza que deseja finalizar esta contagem? Ela será movida para a aba 'Finalizadas'.")) return;
+
+  try {
+    await axios.post('http://localhost:10000/save-count', { countId: id });
+    await axios.post('http://localhost:10000/finalize-count', { countId: id });
+    setMessage('Contagem finalizada com sucesso! Redirecionando...');
+    
+    // Pequena pausa para feedback visual
+    setTimeout(() => navigate('/past-counts'), 1500);
+  } catch (error) {
+    setMessage('Erro ao finalizar contagem: ' + error.response?.data?.error);
+  }
+    
   };
 
   if (loading) return <div className="card">Carregando...</div>;
