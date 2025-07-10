@@ -97,7 +97,15 @@ const ActiveCount = () => {
               placeholder="Digite o nome da empresa"
               className="text-input"
               onFocus={() => company && setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              onBlur={(e) => {
+  const currentTarget = e.currentTarget;
+  setTimeout(() => {
+    if (!currentTarget.contains(document.activeElement)) {
+      setShowSuggestions(false);
+    }
+  }, 200);
+}}
+
             />
             {showSuggestions && filteredCompanies.length > 0 && (
               <ul className="suggestions-list">
