@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import './ActiveCount.css';
-import Lottie from 'lottie-react';
-import successAnimation from './animations/success.json';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
@@ -17,7 +15,6 @@ const ActiveCount = () => {
   const [filteredCompanies, setFilteredCompanies] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [typingTimeout, setTypingTimeout] = useState(null);
 
   useEffect(() => {
@@ -40,7 +37,9 @@ const ActiveCount = () => {
     if (company) {
       if (typingTimeout) clearTimeout(typingTimeout);
       const timeout = setTimeout(() => {
-        const filtered = companies.filter(c => c.toLowerCase().includes(company.toLowerCase()));
+        const filtered = companies.filter(c =>
+          c.toLowerCase().includes(company.toLowerCase())
+        );
         setFilteredCompanies(filtered);
         setShowSuggestions(true);
       }, 300);
@@ -85,8 +84,6 @@ const ActiveCount = () => {
       setTitle('');
       setCompany('');
       document.getElementById('file-input').value = '';
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       setError('Erro ao criar contagem: ' + (err.response?.data?.error || err.message));
     } finally {
@@ -137,7 +134,6 @@ const ActiveCount = () => {
       </nav>
       {message && <p className="count-info" style={{ color: '#34A853' }}>{message}</p>}
       {error && <p className="count-info" style={{ color: 'red' }}>{error}</p>}
-      {success && <Lottie animationData={successAnimation} loop={false} style={{ width: 200, margin: '0 auto' }} />}
     </div>
   );
 };
