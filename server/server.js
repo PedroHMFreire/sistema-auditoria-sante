@@ -11,29 +11,37 @@ const bcrypt = require('bcrypt');
 const { Sequelize, DataTypes } = require('sequelize');
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Aumenta limite para JSON grande
 
 // Configuração do banco de dados
-const sequelize = new Sequelize(process.env.DATABASE_URL);
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  logging: process.env.NODE_ENV !== 'production', // Desativa logs no production
+});
 const User = sequelize.define('User', {
-  email: DataTypes.STRING,
+  email: { type: DataTypes.STRING, unique: true },
   password: DataTypes.STRING,
   company: DataTypes.STRING,
   approved: { type: DataTypes.BOOLEAN, defaultValue: false },
-});
+}, { timestamps: true });
 const Count = sequelize.define('Count', {
   title: DataTypes.STRING,
   company: DataTypes.STRING,
-  timestamp: DataTypes.DATE,
+  timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
   system_data: DataTypes.JSON,
   store_data: DataTypes.JSON,
-  status: DataTypes.STRING,
-  userId: DataTypes.INTEGER,
-});
+  status: { type: DataTypes.STRING, defaultValue: 'created' },
+  userId: { type: DataTypes.INTEGER, allowNull: false },
+}, { timestamps: true });
 
-// Sincronizar modelos
+// Inicialização assíncrona do banco
 (async () => {
-  await sequelize.sync();
+  try {
+    await sequelize.authenticate();
+    await sequelize.sync({ alter: true }); // Alter para atualizar schema sem perder dados
+    console.log('Conexão com o banco estabelecida com sucesso.');
+  } catch (error) {
+    console.error('Erro ao conectar ao banco:', error);
+  }
 })();
 
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
@@ -42,9 +50,7 @@ async function initializeUploadDir() {
   try {
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
     const files = await fs.readdir(UPLOAD_DIR);
-    for (const file of files) {
-      await fs.unlink(path.join(UPLOAD_DIR, file));
-    }
+    await Promise.all(files.map(file => fs.unlink(path.join(UPLOAD_DIR, file))));
   } catch (error) {
     console.error('Erro ao inicializar/limpar uploads:', error);
   }
@@ -55,25 +61,22 @@ initializeUploadDir();
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${uniqueSuffix}-${file.originalname}`);
   },
 });
 
 const upload = multer({
   storage,
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.includes('excel') || file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.xls')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Apenas arquivos Excel são permitidos'), false);
-    }
+    const isExcel = file.mimetype.includes('excel') || ['.xlsx', '.xls'].includes(path.extname(file.originalname).toLowerCase());
+    cb(isExcel ? null : new Error('Apenas arquivos Excel (.xlsx, .xls) são permitidos'), isExcel);
   },
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 }, // Aumenta limite para 10MB
 });
 
 function normalizeColumnName(name) {
-  return name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  return name ? name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
 }
 
 function extractNumericCode(code) {
@@ -81,44 +84,60 @@ function extractNumericCode(code) {
 }
 
 function authenticateToken(req, res, next) {
-  const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Acesso negado' });
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Acesso negado. Token ausente.' });
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(403).json({ error: 'Token inválido' });
+    if (err) return res.status(403).json({ error: `Token inválido: ${err.message}` });
     req.user = decoded;
     next();
   });
 }
 
 app.post('/register', async (req, res) => {
-  const { email, password, company } = req.body;
-  const hashedPassword = await bcrypt.hash(password, 10);
-  await User.create({ email, password: hashedPassword, company });
-  res.status(200).json({ message: 'Registro pendente. Aguarde aprovação.' });
+  try {
+    const { email, password, company } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 12); // Aumenta rounds para 12
+    await User.create({ email, password: hashedPassword, company });
+    res.status(201).json({ message: 'Registro pendente. Aguarde aprovação.' });
+  } catch (error) {
+    res.status(400).json({ error: 'Erro no registro: ' + error.message });
+  }
 });
 
 app.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  const user = await User.findOne({ where: { email } });
-  if (user && await bcrypt.compare(password, user.password) && user.approved) {
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET);
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ where: { email } });
+    if (!user || !(await bcrypt.compare(password, user.password)) || !user.approved) {
+      return res.status(401).json({ error: 'Credenciais inválidas ou conta não aprovada' });
+    }
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.json({ token });
-  } else {
-    res.status(401).json({ error: 'Credenciais inválidas ou conta não aprovada' });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro no login: ' + error.message });
   }
 });
 
 app.post('/request-payment', async (req, res) => {
-  const { email } = req.body;
-  const user = await User.findOne({ where: { email } });
-  if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
-  const pix = 'seu-pix-aqui'; // Substitua pelo seu Pix
-  res.json({ message: `Envie R$ 29,90 para ${pix}. Após confirmação, libere o acesso.`, pix });
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ where: { email } });
+    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+    const pix = 'seu-pix-aqui'; // Substitua por valor dinâmico ou seguro
+    res.json({ message: `Envie R$ 29,90 para ${pix}. Após confirmação, libere o acesso.`, pix });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro na solicitação de pagamento: ' + error.message });
+  }
 });
 
 app.post('/approve-user/:id', async (req, res) => {
-  await User.update({ approved: true }, { where: { id: req.params.id } });
-  res.json({ message: 'Usuário aprovado' });
+  try {
+    await User.update({ approved: true }, { where: { id: req.params.id } });
+    res.status(200).json({ message: 'Usuário aprovado' });
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao aprovar usuário: ' + error.message });
+  }
 });
 
 app.post('/create-count-from-excel', authenticateToken, upload.single('file'), async (req, res) => {
@@ -127,10 +146,11 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
       return res.status(400).json({ error: 'Nenhum arquivo enviado' });
     }
 
-    const { title, company } = req.body;
+    console.log(`Processando arquivo: ${req.file.path}`);
+    const { title, company } = req.body || {};
     const workbook = xlsx.readFile(req.file.path);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
+    const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
 
     if (!rawData || rawData.length < 2) {
       await fs.unlink(req.file.path);
@@ -138,81 +158,86 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
     }
 
     const headers = rawData[0].map(normalizeColumnName);
-    const codeCol = headers.indexOf('codigo');
-    const productCol = headers.indexOf('produto');
-    const balanceCol = headers.indexOf('saldo') !== -1 ? headers.indexOf('saldo') : headers.indexOf('saldo_estoque');
+    console.log('Cabeçalhos detectados:', headers);
+    const [codeCol, productCol, balanceCol] = ['codigo', 'produto', 'saldo', 'saldo_estoque']
+      .map(h => headers.indexOf(h))
+      .filter(i => i !== -1);
 
     if (codeCol === -1 || productCol === -1 || balanceCol === -1) {
       await fs.unlink(req.file.path);
-      return res.status(400).json({ error: 'Formato inválido. A planilha deve conter os cabeçalhos: codigo, produto, saldo ou saldo_estoque' });
+      return res.status(400).json({ error: 'Formato inválido. A planilha deve conter: codigo, produto, saldo ou saldo_estoque' });
     }
 
-    const systemData = rawData.slice(1).filter(row => row && row.length > 0).map(row => {
-      const code = extractNumericCode(row[codeCol]);
-      const product = String(row[productCol] || '').trim();
-      const balance = parseFloat(row[balanceCol]) || 0;
-
-      if (!code || !product) return null;
-      return { code, product, balance };
-    }).filter(item => item !== null);
+    const systemData = rawData.slice(1)
+      .filter(row => row?.length)
+      .map(row => {
+        const code = extractNumericCode(row[codeCol]);
+        const product = (row[productCol] || '').toString().trim();
+        const balance = parseFloat(row[balanceCol]) || 0;
+        console.log(`Linha processada: { code: ${code}, product: ${product}, balance: ${balance} }`);
+        return code && product ? { code, product, balance } : null;
+      })
+      .filter(Boolean);
 
     if (systemData.length === 0) {
       await fs.unlink(req.file.path);
-      return res.status(400).json({ error: 'Nenhum dado válido encontrado na planilha' });
+      return res.status(400).json({ error: 'Nenhum dado válido encontrado' });
     }
 
     const newCount = {
-      title: title || `Contagem sem título - ${new Date().toISOString().slice(0, 10)}`,
+      title: title || `Contagem-${new Date().toISOString().slice(0, 10)}`,
       company: company || 'Sem Empresa',
-      timestamp: new Date().toISOString(),
-      type: 'pre-created',
       system_data: systemData,
-      store_data: [],
-      summary: { totalProductsInExcess: 0, totalProductsMissing: 0, totalProductsRegular: 0 },
-      status: 'created',
       userId: req.user.id,
     };
 
-    await Count.create(newCount);
+    const createdCount = await Count.create(newCount);
     await fs.unlink(req.file.path);
-    res.status(200).json({ message: 'Contagem criada com sucesso!', countId: newCount.id, systemDataLength: systemData.length });
+    res.status(201).json({ message: 'Contagem criada com sucesso', countId: createdCount.id, itemCount: systemData.length });
   } catch (error) {
-    console.error('Erro ao criar contagem:', error);
-    if (req.file && req.file.path) await fs.unlink(req.file.path).catch(err => console.error('Erro ao deletar arquivo:', err));
-    res.status(500).json({ error: 'Erro ao criar contagem: ' + (error.message || 'Erro desconhecido') });
+    console.error('Erro ao criar contagem:', error.stack);
+    if (req.file?.path) await fs.unlink(req.file.path).catch(err => console.error('Erro ao deletar arquivo:', err));
+    res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
   }
 });
 
 app.post('/count-store', authenticateToken, async (req, res) => {
   try {
     const { code, quantity, countId } = req.body;
-    const qty = parseInt(quantity, 10) || 1;
     const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
+    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
 
+    const qty = parseInt(quantity, 10) || 1;
+    count.store_data = count.store_data || [];
     count.store_data.push({ code: extractNumericCode(code), quantity: qty, timestamp: new Date().toISOString() });
     await count.save();
+
     const systemItem = count.system_data.find(item => item.code === extractNumericCode(code));
-    const productName = systemItem ? systemItem.product : 'Produto desconhecido';
-    const balance = systemItem ? systemItem.balance : 0;
-    const difference = qty - balance;
-    let status = 'Regular';
-    if (difference > 0) status = 'Excesso';
-    else if (difference < 0) status = 'Falta';
-    res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}`, productName, status });
+    res.status(200).json({
+      message: `Código ${code} adicionado`,
+      productName: systemItem?.product || 'Produto desconhecido',
+      status: getStatus(systemItem?.balance, qty),
+    });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao adicionar código: ' + error.message });
   }
 });
 
+function getStatus(expected, counted) {
+  const diff = counted - (expected || 0);
+  return diff > 0 ? 'Excesso' : diff < 0 ? 'Falta' : 'Regular';
+}
+
+// Outros endpoints (remove-store-item, edit-store-item, save-count, finalize-count) seguem padrão similar, otimizados abaixo
+
 app.post('/remove-store-item', authenticateToken, async (req, res) => {
   try {
     const { countId, index } = req.body;
     const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count || !count.store_data[index]) return res.status(400).json({ error: 'Item não encontrado' });
+    if (!count || !count.store_data?.[index]) return res.status(404).json({ error: 'Item não encontrado' });
     count.store_data.splice(index, 1);
     await count.save();
-    res.status(200).json({ message: 'Item removido com sucesso' });
+    res.status(200).json({ message: 'Item removido' });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao remover item: ' + error.message });
   }
@@ -221,19 +246,17 @@ app.post('/remove-store-item', authenticateToken, async (req, res) => {
 app.post('/edit-store-item', authenticateToken, async (req, res) => {
   try {
     const { countId, index, code, quantity } = req.body;
-    const qty = parseInt(quantity, 10) || 1;
     const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count || !count.store_data[index]) return res.status(400).json({ error: 'Item não encontrado' });
+    if (!count || !count.store_data?.[index]) return res.status(404).json({ error: 'Item não encontrado' });
+    const qty = parseInt(quantity, 10) || 1;
     count.store_data[index] = { code: extractNumericCode(code), quantity: qty, timestamp: new Date().toISOString() };
     await count.save();
     const systemItem = count.system_data.find(item => item.code === extractNumericCode(code));
-    const productName = systemItem ? systemItem.product : 'Produto desconhecido';
-    const balance = systemItem ? systemItem.balance : 0;
-    const difference = qty - balance;
-    let status = 'Regular';
-    if (difference > 0) status = 'Excesso';
-    else if (difference < 0) status = 'Falta';
-    res.status(200).json({ message: `Item ${code} editado com sucesso`, productName, status });
+    res.status(200).json({
+      message: `Item ${code} editado`,
+      productName: systemItem?.product || 'Produto desconhecido',
+      status: getStatus(systemItem?.balance, qty),
+    });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao editar item: ' + error.message });
   }
@@ -243,9 +266,9 @@ app.post('/save-count', authenticateToken, async (req, res) => {
   try {
     const { countId } = req.body;
     const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
+    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
     await count.save();
-    res.status(200).json({ message: 'Contagem salva!' });
+    res.status(200).json({ message: 'Contagem salva' });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao salvar contagem: ' + error.message });
   }
@@ -255,42 +278,40 @@ app.post('/finalize-count', authenticateToken, async (req, res) => {
   try {
     const { countId } = req.body;
     const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
-    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
+    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
     const report = generateReport(count.system_data, count.store_data, count.title, false);
-    count.status = 'finalized';
-    count.summary = report.summary;
-    count.details = report.details;
-    count.timestamp = new Date().toISOString();
+    Object.assign(count, { status: 'finalized', summary: report.summary, details: report.details, timestamp: new Date() });
     await count.save();
-    res.status(200).json({ message: 'Contagem finalizada com sucesso!' });
+    res.status(200).json({ message: 'Contagem finalizada' });
   } catch (error) {
     res.status(500).json({ error: 'Erro ao finalizar contagem: ' + error.message });
   }
 });
 
 function generateReport(systemData, storeData, countTitle, filterDifferences) {
-  const storeCount = storeData.reduce((acc, entry) => {
-    acc[entry.code] = (acc[entry.code] || 0) + entry.quantity;
+  const storeCount = storeData.reduce((acc, { code, quantity }) => {
+    acc[code] = (acc[code] || 0) + quantity;
     return acc;
   }, {});
-  let productsInExcess = 0, productsMissing = 0, productsRegular = 0;
-  let reportDetails = systemData.map(item => {
+  const summary = { totalProductsInExcess: 0, totalProductsMissing: 0, totalProductsRegular: 0 };
+  const details = systemData.map(item => {
     const counted = storeCount[item.code] || 0;
     const expected = item.balance || 0;
-    const difference = counted - expected;
-    if (difference === 0) productsRegular++;
-    else if (difference > 0) productsInExcess += difference;
-    else if (difference < 0) productsMissing += Math.abs(difference);
-    return { Código: item.code, Produto: item.product, Saldo_Estoque: expected, Contado: counted, Diferença: difference };
+    const diff = counted - expected;
+    if (diff === 0) summary.totalProductsRegular++;
+    else if (diff > 0) summary.totalProductsInExcess += diff;
+    else summary.totalProductsMissing += Math.abs(diff);
+    return { Código: item.code, Produto: item.product, Saldo_Estoque: expected, Contado: counted, Diferença: diff };
   });
-  const unknownProducts = Object.keys(storeCount).filter(code => !systemData.some(item => item.code === code));
-  unknownProducts.forEach(code => {
-    const counted = storeCount[code];
-    productsInExcess += counted;
-    reportDetails.push({ Código: code, Produto: 'Desconhecido', Saldo_Estoque: 0, Contado: counted, Diferença: counted });
+  Object.keys(storeCount).forEach(code => {
+    if (!systemData.some(item => item.code === code)) {
+      const counted = storeCount[code];
+      summary.totalProductsInExcess += counted;
+      details.push({ Código: code, Produto: 'Desconhecido', Saldo_Estoque: 0, Contado: counted, Diferença: counted });
+    }
   });
-  if (filterDifferences) reportDetails = reportDetails.filter(item => item.Diferença !== 0);
-  return { title: countTitle, timestamp: new Date().toISOString(), summary: { totalProductsInExcess: productsInExcess, totalProductsMissing: productsMissing, totalProductsRegular: productsRegular }, details: reportDetails, status: 'finalized' };
+  if (filterDifferences) details = details.filter(item => item.Diferença !== 0);
+  return { title: countTitle, timestamp: new Date(), summary, details, status: 'finalized' };
 }
 
 app.get('/report-detailed', authenticateToken, async (req, res) => {
@@ -299,7 +320,7 @@ app.get('/report-detailed', authenticateToken, async (req, res) => {
     const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
     if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
     const report = generateReport(count.system_data, count.store_data, count.title, false);
-    res.status(200).send(/* HTML do relatório com estilos */); // Manter a lógica existente
+    res.status(200).json(report); // Retorna JSON em vez de HTML temporário
   } catch (error) {
     res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
   }
@@ -311,7 +332,7 @@ app.get('/report-synthetic', authenticateToken, async (req, res) => {
     const count = await Count.findOne({ where: { id: countId, userId: req.user.id } });
     if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
     const report = generateReport(count.system_data, count.store_data, count.title, true);
-    res.status(200).send(/* HTML do relatório com estilos */); // Manter a lógica existente
+    res.status(200).json(report);
   } catch (error) {
     res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
   }
@@ -319,7 +340,7 @@ app.get('/report-synthetic', authenticateToken, async (req, res) => {
 
 app.get('/past-counts', authenticateToken, async (req, res) => {
   try {
-    const counts = await Count.findAll({ where: { userId: req.user.id } });
+    const counts = await Count.findAll({ where: { userId: req.user.id }, order: [['timestamp', 'DESC']] });
     res.status(200).json(counts);
   } catch (error) {
     res.status(500).json({ error: 'Erro ao listar contagens: ' + error.message });
@@ -328,7 +349,7 @@ app.get('/past-counts', authenticateToken, async (req, res) => {
 
 app.get('/companies', authenticateToken, async (req, res) => {
   try {
-    const companies = await User.findAll({ where: { approved: true }, attributes: ['company'] });
+    const companies = await User.findAll({ where: { approved: true }, attributes: ['company'], raw: true });
     res.status(200).json([...new Set(companies.map(c => c.company).filter(c => c && c !== 'Sem Empresa'))]);
   } catch (error) {
     res.status(500).json({ error: 'Erro ao listar empresas: ' + error.message });
@@ -336,12 +357,12 @@ app.get('/companies', authenticateToken, async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+  res.status(200).json({ status: 'ok', uptime: process.uptime() });
 });
 
 app.use((err, req, res, next) => {
-  console.error('Erro não tratado:', err);
-  res.status(500).json({ error: 'Erro interno: ' + err.message });
+  console.error('Erro não tratado:', err.stack);
+  res.status(err.status || 500).json({ error: err.message || 'Erro interno do servidor' });
 });
 
-app.listen(port, () => console.log(`Servidor na porta ${port}`));
+app.listen(port, () => console.log(`Servidor rodando na porta ${port}`));
