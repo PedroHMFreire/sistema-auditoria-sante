@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-
-const API_URL = process.env.REACT_APP_API_URL;
+import './App.css';
 
 const ActiveCount = () => {
   const [file, setFile] = useState(null);
@@ -13,44 +12,33 @@ const ActiveCount = () => {
   const [companies, setCompanies] = useState([]);
   const [filteredCompanies, setFilteredCompanies] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
   useEffect(() => {
     const fetchCompanies = async () => {
-      setIsLoading(true);
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_URL}/companies`, {
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/companies`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setCompanies(response.data || []);
       } catch (err) {
-        setError('Erro ao carregar empresas.');
-      } finally {
-        setIsLoading(false);
+        console.error('Erro ao carregar empresas:', err);
       }
     };
     fetchCompanies();
   }, []);
 
-  const debounce = (func, delay) => {
-    let timeoutId;
-    return (...args) => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => func(...args), delay);
-    };
-  };
-
-  const filterCompanies = debounce((value) => {
-    const filtered = companies.filter(c => c.toLowerCase().includes(value.toLowerCase()));
-    setFilteredCompanies(filtered);
-    setShowSuggestions(true);
-  }, 300);
-
   useEffect(() => {
-    if (company) filterCompanies(company);
-    else setShowSuggestions(false);
-  }, [company]);
+    if (company) {
+      const filtered = companies.filter(c => c.toLowerCase().includes(company.toLowerCase()));
+      setFilteredCompanies(filtered);
+      setShowSuggestions(true);
+    } else {
+      setFilteredCompanies([]);
+      setShowSuggestions(false);
+    }
+  }, [company, companies]);
 
   const handleFileChange = (e) => setFile(e.target.files[0]);
 
@@ -61,42 +49,39 @@ const ActiveCount = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage('');
-    setError('');
-    if (!file || !title || !company) {
-      setError('Todos os campos devem ser preenchidos.');
+    if (!file) {
+      setError('Por favor, selecione um arquivo.');
       return;
     }
-
     const formData = new FormData();
     formData.append('file', file);
     formData.append('title', title);
     formData.append('company', company);
-
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post(`${API_URL}/create-count-from-excel`, formData, {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/create-count-from-excel`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
+          'Content-Type': 'multipart/form-data'
         },
       });
       setMessage(response.data.message);
-      setFile(null); setTitle(''); setCompany('');
+      setError('');
+      setFile(null);
+      setTitle('');
+      setCompany('');
       document.getElementById('file-input').value = '';
+      setShowSuccessAnimation(true);
+      setTimeout(() => setShowSuccessAnimation(false), 3000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao criar contagem.');
+      setError('Erro ao criar contagem: ' + (err.response?.data?.error || 'Erro desconhecido'));
+      setMessage('');
     }
   };
 
   return (
     <div className="card">
       <h2>NOVA CONTAGEM</h2>
-
-      {isLoading && <p>Carregando empresas...</p>}
-      {message && <p style={{ color: '#34A853', fontWeight: 'bold' }}>{message}</p>}
-      {error && <p style={{ color: 'red', fontWeight: 'bold' }}>{error}</p>}
-
       <form onSubmit={handleSubmit}>
         <div className="field">
           <label>Empresa:</label>
@@ -105,54 +90,37 @@ const ActiveCount = () => {
               type="text"
               value={company}
               onChange={(e) => setCompany(e.target.value)}
-              onFocus={() => company && setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
               placeholder="Digite o nome da empresa"
               className="text-input"
+              onFocus={() => company && setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
             />
-            {showSuggestions && (
+            {showSuggestions && filteredCompanies.length > 0 && (
               <ul className="suggestions-list">
-                {filteredCompanies.length > 0 ? (
-                  filteredCompanies.map((comp, index) => (
-                    <li key={index} onClick={() => handleCompanySelect(comp)} className="suggestion-item">{comp}</li>
-                  ))
-                ) : (
-                  <li className="suggestion-item">Nenhuma empresa encontrada</li>
-                )}
+                {filteredCompanies.map((comp, index) => (
+                  <li key={index} onClick={() => handleCompanySelect(comp)} className="suggestion-item">{comp}</li>
+                ))}
               </ul>
             )}
           </div>
         </div>
-
         <div className="field">
           <label>Título da Contagem:</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Digite o título da contagem"
-            className="text-input"
-          />
+          <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Digite o título da contagem" className="text-input" />
         </div>
-
         <div className="field">
           <label>Arquivo Excel:</label>
-          <input
-            type="file"
-            id="file-input"
-            accept=".xlsx, .xls"
-            onChange={handleFileChange}
-            className="file-input"
-          />
+          <input type="file" id="file-input" accept=".xlsx, .xls" onChange={handleFileChange} className="file-input" />
         </div>
-
         <button type="submit" className="btn primary">Criar Contagem</button>
       </form>
-
       <nav>
         <Link to="/created-counts" className="category-link">Criadas</Link>
         <Link to="/past-counts" className="category-link">Finalizadas</Link>
       </nav>
+      {message && <p className="count-info" style={{ color: '#34A853' }}>{message}</p>}
+      {error && <p className="count-info" style={{ color: 'red' }}>{error}</p>}
+      {showSuccessAnimation && <div className="success-animation">✔ Contagem criada com sucesso!</div>}
     </div>
   );
 };
