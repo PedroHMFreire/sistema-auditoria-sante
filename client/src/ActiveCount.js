@@ -14,22 +14,32 @@ const ActiveCount = () => {
 
   const API_URL = 'https://sistema-audite.onrender.com';
 
-  useEffect(() => {
-    const fetchCompanies = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_URL}/companies`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setCompanies(response.data || []);
-      } catch (err) {
-        console.error('Erro ao carregar empresas:', err);
-      }
-    };
-    fetchCompanies();
-  }, []);
+useEffect(() => {
+  const fetchCompanies = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/companies`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-  useEffect(() => {
+      const validCompanies = Array.isArray(response.data)
+        ? response.data.filter(c => typeof c === 'string')
+        : [];
+
+      console.log('Empresas recebidas da API:', response.data);
+      console.log('Empresas filtradas:', validCompanies);
+
+      setCompanies(validCompanies);
+    } catch (err) {
+      console.error('Erro ao carregar empresas:', err);
+      setCompanies([]);
+    }
+  };
+
+  fetchCompanies();
+}, []);
+
+  use(() => {
     if (company) {
       const filtered = companies.filter(c =>
         typeof c === 'string' && c.toLowerCase().includes(company.toLowerCase())
