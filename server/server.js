@@ -123,6 +123,12 @@ app.post('/approve-user/:id', async (req, res) => {
 });
 
 app.post('/create-count-from-excel', authenticateToken, upload.single('file'), async (req, res) => {
+  // TOPO DA ROTA – insira aqui:
+  console.log('🔁 ROTA ACIONADA: /create-count-from-excel');
+  console.log('🔐 Token recebido:', req.headers.authorization);
+  console.log('📂 Arquivo recebido:', req.file);
+  console.log('🧾 Dados recebidos no body:', req.body);
+
   try {
     console.log('Usuário autenticado:', req.user);
     console.log('Arquivo recebido:', req.file);
