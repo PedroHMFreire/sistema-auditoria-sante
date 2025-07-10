@@ -18,8 +18,21 @@ const CreatedCounts = () => {
   }, []);
 
   const fetchCounts = async () => {
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      setError('Usuário não autenticado.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await axios.get('http://localhost:10000/past-counts');
+      const response = await axios.get('https://sistema-audite.onrender.com/past-counts', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
       setCounts(response.data);
       setLoading(false);
     } catch (err) {
@@ -33,15 +46,24 @@ const CreatedCounts = () => {
       alert('Por favor, informe o nome da empresa para filtrar.');
       return;
     }
+
     let filtered = counts;
+
     if (companyFilter) {
-      filtered = filtered.filter(count => count.company && count.company.toLowerCase().includes(companyFilter.toLowerCase()));
+      filtered = filtered.filter(count =>
+        count.company && count.company.toLowerCase().includes(companyFilter.toLowerCase())
+      );
     }
+
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
-      filtered = filtered.filter(count => new Date(count.timestamp) >= start && new Date(count.timestamp) <= end);
+      filtered = filtered.filter(count => {
+        const timestamp = new Date(count.timestamp);
+        return timestamp >= start && timestamp <= end;
+      });
     }
+
     setFilteredCounts(filtered);
     setIsFiltered(true);
   };
@@ -49,31 +71,51 @@ const CreatedCounts = () => {
   if (loading) return <div className="card">Carregando...</div>;
   if (error) return <div className="card" style={{ color: 'red' }}>{error}</div>;
 
+  const displayedCounts = isFiltered ? filteredCounts : [];
+
   return (
     <div className="card">
       <button onClick={() => navigate(-1)} className="btn-back">Voltar</button>
       <h2>Contagens Criadas</h2>
+
       <div className="filter-section">
         <div className="field">
           <label>Filtrar por Empresa:</label>
-          <input type="text" value={companyFilter} onChange={(e) => setCompanyFilter(e.target.value)} placeholder="Digite o nome da empresa" className="text-input" />
+          <input
+            type="text"
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            placeholder="Digite o nome da empresa"
+            className="text-input"
+          />
         </div>
         <div className="field">
           <label>Data Inicial:</label>
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="text-input" />
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="text-input"
+          />
         </div>
         <div className="field">
           <label>Data Final:</label>
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="text-input" />
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="text-input"
+          />
         </div>
         <button onClick={handleFilter} className="btn primary">Buscar</button>
       </div>
+
       {isFiltered ? (
-        filteredCounts.length === 0 ? (
+        displayedCounts.length === 0 ? (
           <p>Nenhuma contagem criada encontrada para os filtros selecionados.</p>
         ) : (
           <ul className="past-counts-list">
-            {filteredCounts.map((count) => (
+            {displayedCounts.map((count) => (
               <li key={count.id} className="past-count-item">
                 <Link to={`/count/${count.id}`} className="count-link">
                   <h3>{count.title || 'Contagem sem título'}</h3>
@@ -85,7 +127,9 @@ const CreatedCounts = () => {
             ))}
           </ul>
         )
-      ) : <p>Por favor, utilize os filtros para buscar contagens criadas.</p>}
+      ) : (
+        <p>Por favor, utilize os filtros para buscar contagens criadas.</p>
+      )}
     </div>
   );
 };
