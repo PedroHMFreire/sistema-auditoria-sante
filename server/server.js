@@ -123,24 +123,43 @@ app.post('/approve-user/:id', async (req, res) => {
 
 app.post('/create-count-from-excel', authenticateToken, upload.single('file'), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    }
+
     const { title, company } = req.body;
     const workbook = xlsx.readFile(req.file.path);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
 
+    if (!rawData || rawData.length < 2) {
+      await fs.unlink(req.file.path);
+      return res.status(400).json({ error: 'Planilha vazia ou inválida' });
+    }
+
     const headers = rawData[0].map(normalizeColumnName);
     const codeCol = headers.indexOf('codigo');
     const productCol = headers.indexOf('produto');
-    let balanceCol = headers.indexOf('saldo');
-    if (balanceCol === -1) balanceCol = headers.indexOf('saldo_estoque');
+    const balanceCol = headers.indexOf('saldo') !== -1 ? headers.indexOf('saldo') : headers.indexOf('saldo_estoque');
+
+    if (codeCol === -1 || productCol === -1 || balanceCol === -1) {
+      await fs.unlink(req.file.path);
+      return res.status(400).json({ error: 'Formato inválido. A planilha deve conter os cabeçalhos: codigo, produto, saldo ou saldo_estoque' });
+    }
 
     const systemData = rawData.slice(1).filter(row => row && row.length > 0).map(row => {
       const code = extractNumericCode(row[codeCol]);
-      const product = String(row[productCol]).trim();
+      const product = String(row[productCol] || '').trim();
       const balance = parseFloat(row[balanceCol]) || 0;
+
+      if (!code || !product) return null;
       return { code, product, balance };
-    }).filter(item => item.code && item.product);
+    }).filter(item => item !== null);
+
+    if (systemData.length === 0) {
+      await fs.unlink(req.file.path);
+      return res.status(400).json({ error: 'Nenhum dado válido encontrado na planilha' });
+    }
 
     const newCount = {
       title: title || `Contagem sem título - ${new Date().toISOString().slice(0, 10)}`,
@@ -156,9 +175,11 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
 
     await Count.create(newCount);
     await fs.unlink(req.file.path);
-    res.status(200).json({ message: 'Contagem criada com sucesso!', countId: newCount.id, systemData });
+    res.status(200).json({ message: 'Contagem criada com sucesso!', countId: newCount.id, systemDataLength: systemData.length });
   } catch (error) {
-    res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
+    console.error('Erro ao criar contagem:', error);
+    if (req.file && req.file.path) await fs.unlink(req.file.path).catch(err => console.error('Erro ao deletar arquivo:', err));
+    res.status(500).json({ error: 'Erro ao criar contagem: ' + (error.message || 'Erro desconhecido') });
   }
 });
 
