@@ -1,4 +1,4 @@
-// server.js
+// server.js (corrigido e completo)
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 10000;
@@ -18,21 +18,19 @@ app.use(express.json({ limit: '10mb' }));
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
   logging: process.env.NODE_ENV !== 'production',
 });
-
 const User = sequelize.define('User', {
   email: { type: DataTypes.STRING, unique: true },
   password: DataTypes.STRING,
   company: DataTypes.STRING,
   approved: { type: DataTypes.BOOLEAN, defaultValue: false },
 }, { timestamps: true });
-
 const Count = sequelize.define('Count', {
   title: DataTypes.STRING,
   company: DataTypes.STRING,
   timestamp: { type: DataTypes.DATE, defaultValue: Sequelize.NOW },
   system_data: DataTypes.JSON,
   store_data: DataTypes.JSON,
-  status: { type: DataTypes.STRING, defaultValue: 'created' },
+  status: { type: DataTypes.STRING, defaultValue: 'active' },
   userId: { type: DataTypes.INTEGER, allowNull: false },
 }, { timestamps: true });
 
@@ -135,14 +133,19 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
 
-    if (!rawData || rawData.length < 2) throw new Error('Planilha vazia ou inválida');
+    if (!rawData || rawData.length < 2) {
+      await fs.unlink(req.file.path);
+      return res.status(400).json({ error: 'Planilha vazia ou inválida' });
+    }
 
     const headers = rawData[0].map(normalizeColumnName);
     const [codeCol, productCol, balanceCol] = ['codigo', 'produto', 'saldo', 'saldo_estoque']
       .map(h => headers.indexOf(h)).filter(i => i !== -1);
 
-    if (codeCol === -1 || productCol === -1 || balanceCol === -1)
-      throw new Error('Formato inválido. A planilha deve conter: codigo, produto, saldo ou saldo_estoque');
+    if (codeCol === -1 || productCol === -1 || balanceCol === -1) {
+      await fs.unlink(req.file.path);
+      return res.status(400).json({ error: 'Formato inválido. A planilha deve conter: codigo, produto, saldo ou saldo_estoque' });
+    }
 
     const systemData = rawData.slice(1).filter(row => row?.length).map(row => {
       const code = extractNumericCode(row[codeCol]);
@@ -151,30 +154,33 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
       return code && product ? { code, product, balance } : null;
     }).filter(Boolean);
 
-    if (!systemData.length) throw new Error('Nenhum dado válido encontrado');
+    if (systemData.length === 0) {
+      await fs.unlink(req.file.path);
+      return res.status(400).json({ error: 'Nenhum dado válido encontrado' });
+    }
 
-    const createdCount = await Count.create({
+    const newCount = {
       title: title || `Contagem-${new Date().toISOString().slice(0, 10)}`,
       company: company || 'Sem Empresa',
       system_data: systemData,
       userId: req.user.id,
-    });
+      status: 'active'
+    };
 
+    const createdCount = await Count.create(newCount);
     await fs.unlink(req.file.path);
     res.status(201).json({ message: 'Contagem criada com sucesso', count: createdCount, itemCount: systemData.length });
   } catch (error) {
-    if (req.file?.path) await fs.unlink(req.file.path).catch(() => {});
+    console.error('Erro ao criar contagem:', error.stack);
+    if (req.file?.path) await fs.unlink(req.file.path).catch(err => console.error('Erro ao deletar arquivo:', err));
     res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
   }
 });
 
 app.get('/counts/active', authenticateToken, async (req, res) => {
   try {
-    const counts = await Count.findAll({
-      where: { status: 'created', userId: req.user.id },
-      order: [['createdAt', 'DESC']]
-    });
-    res.status(200).json(counts);
+    const counts = await Count.findAll({ where: { userId: req.user.id, status: 'active' }, order: [['createdAt', 'DESC']] });
+    res.json(counts);
   } catch (error) {
     res.status(500).json({ error: 'Erro ao buscar contagens: ' + error.message });
   }
