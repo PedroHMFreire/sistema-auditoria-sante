@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 10000;
@@ -13,6 +14,7 @@ const { Sequelize, DataTypes } = require('sequelize');
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Configuração do banco de dados
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
   logging: process.env.NODE_ENV !== 'production',
 });
@@ -125,67 +127,43 @@ app.post('/approve-user/:id', async (req, res) => {
 
 app.post('/create-count-from-excel', authenticateToken, upload.single('file'), async (req, res) => {
   try {
-    if (!req.user?.id) {
-      return res.status(403).json({ error: 'Usuário não autenticado corretamente' });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-    }
+    if (!req.user?.id) return res.status(403).json({ error: 'Usuário não autenticado corretamente' });
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 
     const { title, company } = req.body || {};
     const workbook = xlsx.readFile(req.file.path);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
 
-    if (!rawData || rawData.length < 2) {
-      await fs.unlink(req.file.path);
-      return res.status(400).json({ error: 'Planilha vazia ou inválida' });
-    }
+    if (!rawData || rawData.length < 2) throw new Error('Planilha vazia ou inválida');
 
     const headers = rawData[0].map(normalizeColumnName);
     const [codeCol, productCol, balanceCol] = ['codigo', 'produto', 'saldo', 'saldo_estoque']
-      .map(h => headers.indexOf(h))
-      .filter(i => i !== -1);
+      .map(h => headers.indexOf(h)).filter(i => i !== -1);
 
-    if (codeCol === -1 || productCol === -1 || balanceCol === -1) {
-      await fs.unlink(req.file.path);
-      return res.status(400).json({ error: 'Formato inválido. A planilha deve conter: codigo, produto, saldo ou saldo_estoque' });
-    }
+    if (codeCol === -1 || productCol === -1 || balanceCol === -1)
+      throw new Error('Formato inválido. A planilha deve conter: codigo, produto, saldo ou saldo_estoque');
 
-    const systemData = rawData.slice(1)
-      .filter(row => row?.length)
-      .map(row => {
-        const code = extractNumericCode(row[codeCol]);
-        const product = (row[productCol] || '').toString().trim();
-        const balance = parseFloat(row[balanceCol]) || 0;
-        return code && product ? { code, product, balance } : null;
-      })
-      .filter(Boolean);
+    const systemData = rawData.slice(1).filter(row => row?.length).map(row => {
+      const code = extractNumericCode(row[codeCol]);
+      const product = (row[productCol] || '').toString().trim();
+      const balance = parseFloat(row[balanceCol]) || 0;
+      return code && product ? { code, product, balance } : null;
+    }).filter(Boolean);
 
-    if (systemData.length === 0) {
-      await fs.unlink(req.file.path);
-      return res.status(400).json({ error: 'Nenhum dado válido encontrado' });
-    }
+    if (!systemData.length) throw new Error('Nenhum dado válido encontrado');
 
-    const newCount = {
+    const createdCount = await Count.create({
       title: title || `Contagem-${new Date().toISOString().slice(0, 10)}`,
       company: company || 'Sem Empresa',
       system_data: systemData,
       userId: req.user.id,
-    };
-
-    const createdCount = await Count.create(newCount);
-    await fs.unlink(req.file.path);
-
-    res.status(201).json({
-      message: 'Contagem criada com sucesso',
-      count: createdCount,
-      itemCount: systemData.length
     });
+
+    await fs.unlink(req.file.path);
+    res.status(201).json({ message: 'Contagem criada com sucesso', count: createdCount, itemCount: systemData.length });
   } catch (error) {
-    console.error('Erro ao criar contagem:', error.stack);
-    if (req.file?.path) await fs.unlink(req.file.path).catch(err => console.error('Erro ao deletar arquivo:', err));
+    if (req.file?.path) await fs.unlink(req.file.path).catch(() => {});
     res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
   }
 });
@@ -193,16 +171,12 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
 app.get('/counts/active', authenticateToken, async (req, res) => {
   try {
     const counts = await Count.findAll({
-      where: {
-        userId: req.user.id,
-        status: 'created'
-      },
+      where: { status: 'created', userId: req.user.id },
       order: [['createdAt', 'DESC']]
     });
-    res.json(counts);
+    res.status(200).json(counts);
   } catch (error) {
-    console.error('Erro ao buscar contagens:', error.message);
-    res.status(500).json({ error: 'Erro ao buscar contagens' });
+    res.status(500).json({ error: 'Erro ao buscar contagens: ' + error.message });
   }
 });
 
