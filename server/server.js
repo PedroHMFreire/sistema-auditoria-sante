@@ -1,802 +1,169 @@
-const express = require('express');
+const express = require("express");
 const app = express();
 const port = process.env.PORT || 10000;
-const multer = require('multer');
-const xlsx = require('xlsx');
-const cors = require('cors');
-const path = require('path');
-const fs = require('fs').promises;
+const multer = require("multer");
+const xlsx = require("xlsx");
+const cors = require("cors");
+const path = require("path");
+const fs = require("fs").promises;
 
 app.use(cors());
 app.use(express.json());
 
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
-const COUNTS_FILE = path.join(__dirname, 'counts.json');
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+const COUNTS_FILE = path.join(__dirname, "counts.json");
 
-// Criar o diretório de uploads e limpá-lo na inicialização
+// Inicializar pasta de uploads
 async function initializeUploadDir() {
   try {
     await fs.mkdir(UPLOAD_DIR, { recursive: true });
-    console.log('Diretório de uploads criado:', UPLOAD_DIR);
-
     const files = await fs.readdir(UPLOAD_DIR);
     for (const file of files) {
       await fs.unlink(path.join(UPLOAD_DIR, file));
-      console.log(`Arquivo removido: ${file}`);
     }
-    console.log('Diretório de uploads limpo.');
   } catch (error) {
-    console.error('Erro ao inicializar/limpar o diretório de uploads:', error);
+    console.error("Erro ao inicializar diretório de uploads:", error);
   }
 }
-
 initializeUploadDir();
 
-// Funções para ler e salvar contagens no arquivo JSON
+// Carregar e salvar contagens
 async function loadCounts() {
   try {
-    const data = await fs.readFile(COUNTS_FILE, 'utf8');
+    const data = await fs.readFile(COUNTS_FILE, "utf8");
     return JSON.parse(data);
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      return [];
-    }
-    console.error('Erro ao carregar contagens:', error);
     return [];
   }
 }
-
 async function saveCounts(counts) {
   try {
     await fs.writeFile(COUNTS_FILE, JSON.stringify(counts, null, 2));
-    console.log('Contagens salvas com sucesso em counts.json');
   } catch (error) {
-    console.error('Erro ao salvar contagens:', error);
+    console.error("Erro ao salvar contagens:", error);
   }
 }
 
-// Carregar contagens na inicialização
+// Inicializar contagens
 let counts = [];
 (async () => {
   counts = await loadCounts();
-  console.log('Contagens carregadas:', counts);
 })();
 
+// Upload Excel
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
-  },
+  filename: (req, file, cb) =>
+    cb(null, Date.now() + "-" + file.originalname),
 });
-
 const upload = multer({
   storage,
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.includes('excel') || file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.xls')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Apenas arquivos Excel são permitidos'), false);
-    }
-  },
+  fileFilter: (req, file, cb) =>
+    file.mimetype.includes("excel") ||
+    file.originalname.endsWith(".xlsx") ||
+    file.originalname.endsWith(".xls")
+      ? cb(null, true)
+      : cb(new Error("Apenas arquivos Excel são permitidos")),
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
+// Helpers
 function normalizeColumnName(name) {
-  return name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  return name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
 }
-
 function extractNumericCode(code) {
-  if (code == null || code === '' || (typeof code !== 'string' && typeof code !== 'number')) {
-    return '';
-  }
-  return code.toString().replace(/[^0-9]/g, '');
+  return code ? code.toString().replace(/[^0-9]/g, "") : "";
 }
 
-app.post('/create-count-from-excel', upload.single('file'), async (req, res) => {
+// ROTA 1: Upload e criação de contagem
+app.post("/create-count-from-excel", upload.single("file"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-
     const { title, company } = req.body;
     const workbook = xlsx.readFile(req.file.path);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
 
-    if (rawData.length === 0) return res.status(400).json({ error: 'Planilha vazia' });
-
-    console.log('Dados brutos do Excel:', rawData);
-
     const headers = rawData[0].map(normalizeColumnName);
-    const codeCol = headers.indexOf('codigo');
-    const productCol = headers.indexOf('produto');
-    let balanceCol = headers.indexOf('saldo');
-    if (balanceCol === -1) balanceCol = headers.indexOf('saldo_estoque');
+    const codeCol = headers.indexOf("codigo");
+    const productCol = headers.indexOf("produto");
+    let balanceCol = headers.indexOf("saldo");
+    if (balanceCol === -1) balanceCol = headers.indexOf("saldo_estoque");
 
-    if (codeCol === -1 || productCol === -1 || balanceCol === -1) {
-      return res.status(400).json({
-        error: 'Formato de planilha inválido. Colunas esperadas: Código, Produto, Saldo (ou Saldo_Estoque)',
-      });
-    }
+    if (codeCol === -1 || productCol === -1 || balanceCol === -1)
+      return res.status(400).json({ error: "Planilha inválida." });
 
-    const systemData = rawData.slice(1).filter(row => row && row.length > 0).map((row, index) => {
+    const systemData = rawData.slice(1).map((row) => {
       const code = extractNumericCode(row[codeCol]);
-      const product = row[productCol] ? String(row[productCol]).trim() : '';
+      const product = String(row[productCol] || "").trim();
       const balance = parseFloat(row[balanceCol]) || 0;
-
-      console.log(`Linha ${index + 2}: Código=${code}, Produto=${product}, Saldo=${balance}`);
-
-      if (!code || !product) {
-        console.log(`Linha ${index + 2} ignorada: Código ou Produto vazio`);
-        return null;
-      }
-
-      return { code, product, balance };
-    }).filter(item => item !== null);
-
-    if (systemData.length === 0) return res.status(400).json({ error: 'Nenhuma linha válida encontrada.' });
+      return code && product ? { code, product, balance } : null;
+    }).filter(Boolean);
 
     const newCount = {
       id: counts.length + 1,
-      title: title || `Contagem sem título - ${new Date().toISOString().slice(0, 10)}`,
-      company: company || 'Sem Empresa',
+      title: title || "Sem título",
+      company: company || "Sem empresa",
       timestamp: new Date().toISOString(),
-      type: 'pre-created',
+      type: "pre-created",
       system_data: systemData,
       store_data: [],
-      summary: { totalProductsInExcess: 0, totalProductsMissing: 0, totalProductsRegular: 0 },
-      details: [],
-      status: 'created',
+      summary: {},
+      status: "created",
     };
-
     counts.push(newCount);
     await saveCounts(counts);
-    console.log('Nova contagem criada:', newCount);
-
-    await fs.unlink(req.file.path).catch(err => console.error('Erro ao excluir arquivo:', err));
-    res.status(200).json({
-      message: 'Contagem criada com sucesso!',
-      countId: newCount.id,
-      systemData,
-    });
-  } catch (error) {
-    console.error('Erro ao criar contagem:', error);
-    res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
+    await fs.unlink(req.file.path);
+    res.json({ message: "Contagem criada!", countId: newCount.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/count-store', async (req, res) => {
-  try {
-    const { code, quantity, countId } = req.body;
-    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'Código inválido' });
-    const qty = parseInt(quantity, 10) || 1;
-    if (qty <= 0) return res.status(400).json({ error: 'Quantidade inválida' });
-    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
+// ROTA 2: Adição de item contado
+app.post("/count-store", async (req, res) => {
+  const { code, quantity, countId } = req.body;
+  const count = counts.find((c) => c.id === parseInt(countId));
+  if (!count) return res.status(400).json({ error: "Contagem não encontrada." });
 
-    const count = counts.find(c => c.id === parseInt(countId));
-    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
+  const existing = count.store_data.find((p) => p.code === code);
+  if (existing) existing.quantity += parseInt(quantity);
+  else count.store_data.push({ code, quantity: parseInt(quantity) });
 
-    if (!Array.isArray(count.store_data)) count.store_data = [];
-    count.store_data.push({ code: extractNumericCode(code), quantity: qty, timestamp: new Date().toISOString() });
-    count.status = 'created';
-    await saveCounts(counts);
+  const systemItem = count.system_data.find((p) => p.code === code);
+  const balance = systemItem?.balance || 0;
+  const difference = parseInt(quantity) - balance;
 
-    const systemItem = count.system_data.find(item => item.code === extractNumericCode(code));
-    const productName = systemItem ? systemItem.product : 'Produto desconhecido';
-    const balance = systemItem ? systemItem.balance : 0;
-    const difference = qty - balance;
-    let status = 'Regular';
-    if (difference > 0) status = 'Excesso';
-    else if (difference < 0) status = 'Falta';
+  let status = "Regular";
+  if (difference > 0) status = "Excesso";
+  else if (difference < 0) status = "Falta";
 
-    res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}`, productName, status });
-  } catch (error) {
-    console.error('Erro ao adicionar código:', error);
-    res.status(500).json({ error: 'Erro ao adicionar código: ' + error.message });
-  }
+  count.store_data.find((p) => p.code === code).status = status;
+  await saveCounts(counts);
+  res.json({ message: "Produto registrado!", status });
 });
 
-app.post('/remove-store-item', async (req, res) => {
-  try {
-    const { countId, index } = req.body;
-    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
-    if (index === undefined || index < 0) return res.status(400).json({ error: 'Índice inválido' });
-
-    const count = counts.find(c => c.id === parseInt(countId));
-    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
-
-    if (!Array.isArray(count.store_data) || count.store_data.length <= index) {
-      return res.status(400).json({ error: 'Item não encontrado' });
-    }
-
-    const removedItem = count.store_data.splice(index, 1)[0];
-    await saveCounts(counts);
-
-    res.status(200).json({ message: `Item ${removedItem.code} removido com sucesso` });
-  } catch (error) {
-    console.error('Erro ao remover item:', error);
-    res.status(500).json({ error: 'Erro ao remover item: ' + error.message });
-  }
+// ✅ ROTA 3: Listar todas as contagens
+app.get("/counts", async (req, res) => {
+  res.json(counts.filter((c) => c.status !== "finalized"));
 });
 
-app.post('/edit-store-item', async (req, res) => {
-  try {
-    const { countId, index, code, quantity } = req.body;
-    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
-    if (index === undefined || index < 0) return res.status(400).json({ error: 'Índice inválido' });
-    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'Código inválido' });
-    const qty = parseInt(quantity, 10) || 1;
-    if (qty <= 0) return res.status(400).json({ error: 'Quantidade inválida' });
-
-    const count = counts.find(c => c.id === parseInt(countId));
-    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
-
-    if (!Array.isArray(count.store_data) || count.store_data.length <= index) {
-      return res.status(400).json({ error: 'Item não encontrado' });
-    }
-
-    count.store_data[index] = {
-      ...count.store_data[index],
-      code: extractNumericCode(code),
-      quantity: qty,
-      timestamp: new Date().toISOString(),
-    };
-    await saveCounts(counts);
-
-    const systemItem = count.system_data.find(item => item.code === extractNumericCode(code));
-    const productName = systemItem ? systemItem.product : 'Produto desconhecido';
-    const balance = systemItem ? systemItem.balance : 0;
-    const difference = qty - balance;
-    let status = 'Regular';
-    if (difference > 0) status = 'Excesso';
-    else if (difference < 0) status = 'Falta';
-
-    res.status(200).json({ message: `Item ${code} editado com sucesso`, productName, status });
-  } catch (error) {
-    console.error('Erro ao editar item:', error);
-    res.status(500).json({ error: 'Erro ao editar item: ' + error.message });
-  }
+// ✅ ROTA 4: Obter uma contagem específica
+app.get("/count/:id", async (req, res) => {
+  const count = counts.find((c) => c.id === parseInt(req.params.id));
+  if (!count) return res.status(404).json({ error: "Contagem não encontrada" });
+  res.json(count);
 });
 
-app.post('/save-count', async (req, res) => {
-  try {
-    const { countId } = req.body;
-    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
+// ✅ ROTA 5: Finalizar contagem
+app.put("/count/:id/finalize", async (req, res) => {
+  const count = counts.find((c) => c.id === parseInt(req.params.id));
+  if (!count) return res.status(404).json({ error: "Contagem não encontrada" });
 
-    const count = counts.find(c => c.id === parseInt(countId));
-    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
-
-    if (!Array.isArray(count.store_data) || count.store_data.length === 0) {
-      return res.status(400).json({ error: 'Nenhuma contagem para salvar' });
-    }
-
-    await saveCounts(counts);
-    res.status(200).json({ message: 'Contagem salva!' });
-  } catch (error) {
-    console.error('Erro ao salvar contagem:', error);
-    res.status(500).json({ error: 'Erro ao salvar contagem: ' + error.message });
-  }
+  count.status = "finalized";
+  await saveCounts(counts);
+  res.json({ message: "Contagem finalizada!" });
 });
 
-app.post('/finalize-count', async (req, res) => {
-  try {
-    const { countId } = req.body;
-    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
-
-    const count = counts.find(c => c.id === parseInt(countId));
-    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
-
-    const report = generateReport(count.system_data, count.store_data, count.title, false);
-    count.status = 'finalized';
-    count.summary = report.summary;
-    count.details = report.details;
-    count.timestamp = new Date().toISOString();
-    await saveCounts(counts);
-
-    res.status(200).json({ message: 'Contagem finalizada com sucesso!' });
-  } catch (error) {
-    console.error('Erro ao finalizar contagem:', error);
-    res.status(500).json({ error: 'Erro ao finalizar contagem: ' + error.message });
-  }
+app.listen(port, () => {
+  console.log(`Servidor rodando na porta ${port}`);
 });
-
-function generateReport(systemData, storeData, countTitle, filterDifferences = false) {
-  if (!Array.isArray(systemData) || systemData.length === 0) {
-    throw new Error('Nenhum dado do sistema');
-  }
-
-  const storeCount = storeData.reduce((acc, entry) => {
-    acc[entry.code] = (acc[entry.code] || 0) + entry.quantity;
-    return acc;
-  }, {});
-
-  let productsInExcess = 0;
-  let productsMissing = 0;
-  let productsRegular = 0;
-
-  let reportDetails = systemData.map(item => {
-    const counted = storeCount[item.code] || 0;
-    const expected = item.balance || 0;
-    const difference = counted - expected;
-
-    if (difference === 0) productsRegular++;
-    else if (difference > 0) productsInExcess += difference;
-    else if (difference < 0) productsMissing += Math.abs(difference);
-
-    return {
-      Código: item.code,
-      Produto: item.product,
-      Saldo_Estoque: expected,
-      Contado: counted,
-      Diferença: difference,
-    };
-  });
-
-  const unknownProducts = Object.keys(storeCount).filter(code => !systemData.some(item => item.code === code));
-  unknownProducts.forEach(code => {
-    const counted = storeCount[code];
-    productsInExcess += counted;
-    reportDetails.push({
-      Código: code,
-      Produto: 'Desconhecido',
-      Saldo_Estoque: 0,
-      Contado: counted,
-      Diferença: counted,
-    });
-  });
-
-  if (filterDifferences) {
-    reportDetails = reportDetails.filter(item => item.Diferença !== 0);
-  }
-
-  return {
-    title: countTitle || 'Contagem sem título',
-    timestamp: new Date().toISOString(),
-    type: filterDifferences ? 'synthetic' : 'detailed',
-    system_data: systemData,
-    store_data: storeData,
-    summary: {
-      totalProductsInExcess: productsInExcess,
-      totalProductsMissing: productsMissing,
-      totalProductsRegular: productsRegular,
-    },
-    details: reportDetails,
-    status: 'finalized',
-  };
-}
-
-// Estilos CSS inline para os relatórios
-const reportStyles = `
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-  body {
-    font-family: 'Poppins', sans-serif;
-    background-color: #1C2526;
-    color: #FFFFFF;
-  }
-  .App {
-    max-width: 900px;
-    margin: 40px auto;
-    padding: 20px;
-    border-radius: 12px;
-    background-color: #1C2526;
-  }
-  .App-header {
-    text-align: center;
-    padding: 20px;
-    border-bottom: 1px solid #444;
-    background-color: #1C2526;
-  }
-  .app-title {
-    font-family: 'Norwester', sans-serif;
-    font-size: 2.5em;
-    font-weight: bold;
-    color: #FF6200;
-    margin-bottom: 10px;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-  }
-  .nav-link {
-    text-decoration: none;
-    color: #FFFFFF;
-    font-size: 1em;
-    padding: 8px 16px;
-    border-radius: 6px;
-    transition: background-color 0.3s, color 0.3s;
-  }
-  .nav-link:hover {
-    background-color: #FF6200;
-    color: #000000;
-  }
-  .App-main {
-    padding: 30px 0;
-  }
-  .card {
-    background: #1C2526;
-    border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 20px;
-  }
-  .card h2 {
-    font-size: 1.8em;
-    color: #FFFFFF;
-    margin-bottom: 15px;
-    font-weight: 600;
-  }
-  .card h3 {
-    font-size: 1.5em;
-    color: #FFFFFF;
-    margin-bottom: 10px;
-  }
-  .card p {
-    font-size: 1em;
-    color: #FFFFFF;
-    margin-bottom: 15px;
-  }
-  .report-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-  }
-  .report-table th,
-  .report-table td {
-    border: 1px solid #555;
-    padding: 10px;
-    text-align: center;
-    color: #FFFFFF;
-  }
-  .report-table th {
-    background-color: #333333;
-    color: #FFFFFF;
-  }
-  .report-actions {
-    margin-top: 20px;
-    display: flex;
-    gap: 15px;
-    justify-content: center;
-  }
-  .action-btn {
-    background-color: #FF6200;
-    border: none;
-    border-radius: 6px;
-    padding: 10px;
-    cursor: pointer;
-    transition: background-color 0.3s, transform 0.1s;
-  }
-  .action-btn:hover {
-    background-color: #E65C00;
-    transform: translateY(-2px);
-  }
-  .action-btn svg {
-    width: 24px;
-    height: 24px;
-    fill: #000000;
-  }
-  @media print {
-    .App-header {
-      display: none !important;
-    }
-    .App-main {
-      padding: 0;
-    }
-    .card {
-      border: none;
-      padding: 0;
-    }
-    .report-actions {
-      display: none !important;
-    }
-    .report-table th,
-    .report-table td {
-      border: 1px solid #000;
-      padding: 5px;
-    }
-    .report-table th {
-      background-color: #E0E0E0;
-    }
-  }
-`;
-
-app.get('/report-detailed', async (req, res) => {
-  try {
-    const { countId } = req.query;
-    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
-
-    const count = counts.find(c => c.id === parseInt(countId));
-    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
-
-    const systemData = Array.isArray(count.system_data) ? count.system_data : [];
-    const storeData = Array.isArray(count.store_data) ? count.store_data : [];
-
-    if (systemData.length === 0) {
-      return res.status(400).json({ error: 'Nenhum dado do sistema disponível para gerar o relatório' });
-    }
-
-    const report = generateReport(systemData, storeData, count.title, false);
-
-    // URL para compartilhar no WhatsApp
-    const shareUrl = encodeURIComponent(`${req.protocol}://${req.get('host')}${req.originalUrl}`);
-    const whatsappMessage = encodeURIComponent(`Confira o relatório detalhado: ${report.title}`);
-    const whatsappLink = `https://api.whatsapp.com/send?text=${whatsappMessage}%20${shareUrl}`;
-
-    const html = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Relatório Detalhado - AUDITÊ</title>
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-        <style>
-          ${reportStyles}
-        </style>
-      </head>
-      <body>
-        <div class="App">
-          <header class="App-header">
-            <h1 class="app-title">AUDITÊ</h1>
-            <nav>
-              <a href="/past-counts" class="nav-link">Voltar</a>
-            </nav>
-          </header>
-          <main class="App-main">
-            <div class="card">
-              <h2>RELATÓRIO DETALHADO</h2>
-              <p><strong>Empresa:</strong> ${count.company || 'Sem Empresa'}</p>
-              <p><strong>Título:</strong> ${report.title}</p>
-              <p><strong>Data:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
-              <h3>Resumo</h3>
-              <p>Produtos em Excesso: ${report.summary.totalProductsInExcess}</p>
-              <p>Produtos Faltando: ${report.summary.totalProductsMissing}</p>
-              <p>Produtos Regulares: ${report.summary.totalProductsRegular}</p>
-              <h3>Detalhes</h3>
-              <table class="report-table">
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Produto</th>
-                    <th>Saldo Estoque</th>
-                    <th>Contado</th>
-                    <th>Diferença</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${report.details.map(item => `
-                    <tr>
-                      <td>${item.Código || 'N/A'}</td>
-                      <td>${item.Produto || 'N/A'}</td>
-                      <td>${item.Saldo_Estoque}</td>
-                      <td>${item.Contado}</td>
-                      <td>${item.Diferença}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-              <div class="report-actions">
-                <button class="action-btn" onclick="window.print()" title="Imprimir">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
-                  </svg>
-                </button>
-                <a href="${whatsappLink}" target="_blank" class="action-btn" title="Enviar por WhatsApp">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.134.56 4.14 1.53 5.894L0 24l6.252-1.64A11.95 11.95 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22.002a9.95 9.95 0 01-5.073-1.39l-.354-.21-3.71.973.987-3.61-.21-.354a9.95 9.95 0 01-1.39-5.073c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10zm5.92-7.316c-.31-.155-1.84-.905-2.126-.998-.287-.094-.496-.102-.705.103-.21.205-.81.998-.998 1.202-.188.205-.376.23-.686.075-.31-.155-1.31-.483-2.496-1.54-.92-.823-1.54-1.84-1.728-2.15-.188-.31-.02-.477.14-.632.144-.14.31-.362.465-.558.155-.195.205-.31.31-.514.103-.205.052-.387-.026-.542-.077-.155-.705-1.702-.965-2.332-.252-.614-.514-.514-.705-.514-.188 0-.413-.01-.638-.01-.225 0-.592.077-.905.387-.31.31-1.18 1.15-1.18 2.805 0 1.655 1.205 3.255 1.375 3.48.17.225 2.39 3.64 5.794 5.103 3.404 1.463 3.404.975 4.02.81.615-.165 1.84-.752 2.1-1.477.26-.725.26-1.34.18-1.477-.077-.138-.287-.225-.596-.38z"/>
-                  </svg>
-                </a>
-              </div>
-            </div>
-          </main>
-        </div>
-      </body>
-      </html>
-    `;
-    res.status(200).send(html);
-  } catch (error) {
-    console.error('Erro ao gerar relatório detalhado:', error);
-    res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
-  }
-});
-
-app.get('/report-synthetic', async (req, res) => {
-  try {
-    const { countId } = req.query;
-    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
-
-    const count = counts.find(c => c.id === parseInt(countId));
-    if (!count) return res.status(404).json({ error: 'Contagem não encontrada' });
-
-    const systemData = Array.isArray(count.system_data) ? count.system_data : [];
-    const storeData = Array.isArray(count.store_data) ? count.store_data : [];
-
-    if (systemData.length === 0) {
-      return res.status(400).json({ error: 'Nenhum dado do sistema disponível para gerar o relatório' });
-    }
-
-    const report = generateReport(systemData, storeData, count.title, true);
-
-    // URL para compartilhar no WhatsApp
-    const shareUrl = encodeURIComponent(`${req.protocol}://${req.get('host')}${req.originalUrl}`);
-    const whatsappMessage = encodeURIComponent(`Confira o relatório sintético: ${report.title}`);
-    const whatsappLink = `https://api.whatsapp.com/send?text=${whatsappMessage}%20${shareUrl}`;
-
-    const html = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Relatório Sintético - AUDITÊ</title>
-        <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
-        <style>
-          ${reportStyles}
-        </style>
-      </head>
-      <body>
-        <div class="App">
-          <header class="App-header">
-            <h1 class="app-title">AUDITÊ</h1>
-            <nav>
-              <a href="/past-counts" class="nav-link">Voltar</a>
-            </nav>
-          </header>
-          <main class="App-main">
-            <div class="card">
-              <h2>RELATÓRIO SINTÉTICO</h2>
-              <p><strong>Empresa:</strong> ${count.company || 'Sem Empresa'}</p>
-              <p><strong>Título:</strong> ${report.title}</p>
-              <p><strong>Data:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
-              <h3>Resumo</h3>
-              <p>Produtos em Excesso: ${report.summary.totalProductsInExcess}</p>
-              <p>Produtos Faltando: ${report.summary.totalProductsMissing}</p>
-              <p>Produtos Regulares: ${report.summary.totalProductsRegular}</p>
-              <h3>Detalhes (Apenas Diferenças)</h3>
-              ${report.details.length > 0 ? `
-                <table class="report-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th>
-                      <th>Produto</th>
-                      <th>Saldo Estoque</th>
-                      <th>Contado</th>
-                      <th>Diferença</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${report.details.map(item => `
-                      <tr>
-                        <td>${item.Código || 'N/A'}</td>
-                        <td>${item.Produto || 'N/A'}</td>
-                        <td>${item.Saldo_Estoque}</td>
-                        <td>${item.Contado}</td>
-                        <td>${item.Diferença}</td>
-                      </tr>
-                    `).join('')}
-                  </tbody>
-                </table>
-              ` : '<p>Nenhuma diferença encontrada.</p>'}
-              <div class="report-actions">
-                <button class="action-btn" onclick="window.print()" title="Imprimir">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
-                  </svg>
-                </button>
-                <a href="${whatsappLink}" target="_blank" class="action-btn" title="Enviar por WhatsApp">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                    <path d="M12 0C5.373 0 0 5.373 0 12c0 2.134.56 4.14 1.53 5.894L0 24l6.252-1.64A11.95 11.95 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22.002a9.95 9.95 0 01-5.073-1.39l-.354-.21-3.71.973.987-3.61-.21-.354a9.95 9.95 0 01-1.39-5.073c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10zm5.92-7.316c-.31-.155-1.84-.905-2.126-.998-.287-.094-.496-.102-.705.103-.21.205-.81.998-.998 1.202-.188.205-.376.23-.686.075-.31-.155-1.31-.483-2.496-1.54-.92-.823-1.54-1.84-1.728-2.15-.188-.31-.02-.477.14-.632.144-.14.31-.362.465-.558.155-.195.205-.31.31-.514.103-.205.052-.387-.026-.542-.077-.155-.705-1.702-.965-2.332-.252-.614-.514-.514-.705-.514-.188 0-.413-.01-.638-.01-.225 0-.592.077-.905.387-.31.31-1.18 1.15-1.18 2.805 0 1.655 1.205 3.255 1.375 3.48.17.225 2.39 3.64 5.794 5.103 3.404 1.463 3.404.975 4.02.81.615-.165 1.84-.752 2.1-1.477.26-.725.26-1.34.18-1.477-.077-.138-.287-.225-.596-.38z"/>
-                  </svg>
-                </a>
-              </div>
-            </div>
-          </main>
-        </div>
-      </body>
-      </html>
-    `;
-    res.status(200).send(html);
-  } catch (error) {
-    console.error('Erro ao gerar relatório sintético:', error);
-    res.status(500).json({ error: 'Erro ao gerar relatório: ' + error.message });
-  }
-});
-
-app.get('/past-counts', async (req, res) => {
-  try {
-    const { status, company, startDate, endDate } = req.query;
-    let filteredCounts = counts;
-
-    if (status) {
-      filteredCounts = filteredCounts.filter(count => count.status === status);
-    }
-    if (company) {
-      filteredCounts = filteredCounts.filter(count => count.company && count.company.toLowerCase().includes(company.toLowerCase()));
-    }
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      filteredCounts = filteredCounts.filter(count => {
-        const countDate = new Date(count.timestamp);
-        return countDate >= start && countDate <= end;
-      });
-    }
-
-    // Ordenar do mais recente para o mais antigo
-    filteredCounts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-    console.log('Dados enviados para o frontend:', filteredCounts);
-    res.status(200).json(filteredCounts);
-  } catch (error) {
-    console.error('Erro ao listar contagens:', error);
-    res.status(500).json({ error: 'Erro ao listar contagens: ' + error.message });
-  }
-});
-
-app.get('/companies', async (req, res) => {
-  try {
-    const companies = [...new Set(counts.map(count => count.company).filter(company => company && company !== 'Sem Empresa'))];
-    res.status(200).json(companies);
-  } catch (error) {
-    console.error('Erro ao listar empresas:', error);
-    res.status(500).json({ error: 'Erro ao listar empresas: ' + error.message });
-  }
-});
-
-app.post('/reset', async (req, res) => {
-  try {
-    counts = [];
-    await saveCounts(counts);
-    res.status(200).json({ message: 'Dados reiniciados!' });
-  } catch (error) {
-    console.error('Erro ao reiniciar:', error);
-    res.status(500).json({ error: 'Erro ao reiniciar: ' + error.message });
-  }
-});
-
-app.get('/health', (req, res) => {
-  try {
-    res.status(200).json({ status: 'ok', counts: counts.length });
-  } catch (error) {
-    console.error('Erro no endpoint /health:', error);
-    res.status(500).json({ error: 'Erro no endpoint de saúde' });
-  }
-});
-
-if (process.env.NODE_ENV === 'production') {
-  const staticDir = path.join(__dirname, '../client/build');
-  app.use(express.static(staticDir));
-
-  app.get('*', (req, res) => {
-    try {
-      if (req.path.startsWith('/create-count') ||
-          req.path.startsWith('/count-store') ||
-          req.path.startsWith('/save-count') ||
-          req.path.startsWith('/finalize-count') ||
-          req.path.startsWith('/report-detailed') ||
-          req.path.startsWith('/report-synthetic') ||
-          req.path.startsWith('/past-counts') ||
-          req.path.startsWith('/companies') ||
-          req.path.startsWith('/reset') ||
-          req.path.startsWith('/health')) {
-        return res.status(404).json({ error: 'Rota não encontrada' });
-      }
-
-      const indexPath = path.join(staticDir, 'index.html');
-      if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-      } else {
-        res.status(500).json({ error: 'Frontend não construído' });
-      }
-    } catch (error) {
-      console.error('Erro ao servir o frontend:', error);
-      res.status(500).json({ error: 'Erro ao servir o frontend' });
-    }
-  });
-}
-
-app.use((err, req, res, next) => {
-  console.error('Erro não tratado:', err);
-  res.status(500).json({ error: 'Erro interno: ' + err.message });
-});
-
-app.listen(port, () => console.log(`Servidor na porta ${port}`));
