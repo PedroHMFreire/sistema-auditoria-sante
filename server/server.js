@@ -97,7 +97,7 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
   try {
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 
-    const { title, company } = req.body; // Adicionado company
+    const { title, company } = req.body;
     const workbook = xlsx.readFile(req.file.path);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
@@ -138,7 +138,7 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
     const newCount = {
       id: counts.length + 1,
       title: title || `Contagem sem título - ${new Date().toISOString().slice(0, 10)}`,
-      company: company || 'Sem Empresa', // Adicionado company
+      company: company || 'Sem Empresa',
       timestamp: new Date().toISOString(),
       type: 'pre-created',
       system_data: systemData,
@@ -176,15 +176,19 @@ app.post('/count-store', async (req, res) => {
     if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
 
     if (!Array.isArray(count.store_data)) count.store_data = [];
-    count.store_data.push({ code: extractNumericCode(code), quantity: qty, timestamp: new Date().toISOString() }); // Adicionado timestamp
+    count.store_data.push({ code: extractNumericCode(code), quantity: qty, timestamp: new Date().toISOString() });
     count.status = 'created';
     await saveCounts(counts);
 
-    // Buscar o nome do produto
     const systemItem = count.system_data.find(item => item.code === extractNumericCode(code));
     const productName = systemItem ? systemItem.product : 'Produto desconhecido';
+    const balance = systemItem ? systemItem.balance : 0;
+    const difference = qty - balance;
+    let status = 'Regular';
+    if (difference > 0) status = 'Excesso';
+    else if (difference < 0) status = 'Falta';
 
-    res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}`, productName });
+    res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}`, productName, status });
   } catch (error) {
     console.error('Erro ao adicionar código:', error);
     res.status(500).json({ error: 'Erro ao adicionar código: ' + error.message });
@@ -211,6 +215,45 @@ app.post('/remove-store-item', async (req, res) => {
   } catch (error) {
     console.error('Erro ao remover item:', error);
     res.status(500).json({ error: 'Erro ao remover item: ' + error.message });
+  }
+});
+
+app.post('/edit-store-item', async (req, res) => {
+  try {
+    const { countId, index, code, quantity } = req.body;
+    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
+    if (index === undefined || index < 0) return res.status(400).json({ error: 'Índice inválido' });
+    if (!code || typeof code !== 'string') return res.status(400).json({ error: 'Código inválido' });
+    const qty = parseInt(quantity, 10) || 1;
+    if (qty <= 0) return res.status(400).json({ error: 'Quantidade inválida' });
+
+    const count = counts.find(c => c.id === parseInt(countId));
+    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
+
+    if (!Array.isArray(count.store_data) || count.store_data.length <= index) {
+      return res.status(400).json({ error: 'Item não encontrado' });
+    }
+
+    count.store_data[index] = {
+      ...count.store_data[index],
+      code: extractNumericCode(code),
+      quantity: qty,
+      timestamp: new Date().toISOString(),
+    };
+    await saveCounts(counts);
+
+    const systemItem = count.system_data.find(item => item.code === extractNumericCode(code));
+    const productName = systemItem ? systemItem.product : 'Produto desconhecido';
+    const balance = systemItem ? systemItem.balance : 0;
+    const difference = qty - balance;
+    let status = 'Regular';
+    if (difference > 0) status = 'Excesso';
+    else if (difference < 0) status = 'Falta';
+
+    res.status(200).json({ message: `Item ${code} editado com sucesso`, productName, status });
+  } catch (error) {
+    console.error('Erro ao editar item:', error);
+    res.status(500).json({ error: 'Erro ao editar item: ' + error.message });
   }
 });
 
@@ -678,11 +721,24 @@ app.get('/past-counts', async (req, res) => {
       });
     }
 
+    // Ordenar do mais recente para o mais antigo
+    filteredCounts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
     console.log('Dados enviados para o frontend:', filteredCounts);
     res.status(200).json(filteredCounts);
   } catch (error) {
     console.error('Erro ao listar contagens:', error);
     res.status(500).json({ error: 'Erro ao listar contagens: ' + error.message });
+  }
+});
+
+app.get('/companies', async (req, res) => {
+  try {
+    const companies = [...new Set(counts.map(count => count.company).filter(company => company && company !== 'Sem Empresa'))];
+    res.status(200).json(companies);
+  } catch (error) {
+    console.error('Erro ao listar empresas:', error);
+    res.status(500).json({ error: 'Erro ao listar empresas: ' + error.message });
   }
 });
 
@@ -719,6 +775,7 @@ if (process.env.NODE_ENV === 'production') {
           req.path.startsWith('/report-detailed') ||
           req.path.startsWith('/report-synthetic') ||
           req.path.startsWith('/past-counts') ||
+          req.path.startsWith('/companies') ||
           req.path.startsWith('/reset') ||
           req.path.startsWith('/health')) {
         return res.status(404).json({ error: 'Rota não encontrada' });
