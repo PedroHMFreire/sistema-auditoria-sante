@@ -97,7 +97,7 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
   try {
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
 
-    const { title } = req.body;
+    const { title, company } = req.body; // Adicionado company
     const workbook = xlsx.readFile(req.file.path);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rawData = xlsx.utils.sheet_to_json(sheet, { header: 1 });
@@ -138,6 +138,7 @@ app.post('/create-count-from-excel', upload.single('file'), async (req, res) => 
     const newCount = {
       id: counts.length + 1,
       title: title || `Contagem sem título - ${new Date().toISOString().slice(0, 10)}`,
+      company: company || 'Sem Empresa', // Adicionado company
       timestamp: new Date().toISOString(),
       type: 'pre-created',
       system_data: systemData,
@@ -175,14 +176,41 @@ app.post('/count-store', async (req, res) => {
     if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
 
     if (!Array.isArray(count.store_data)) count.store_data = [];
-    count.store_data.push({ code: extractNumericCode(code), quantity: qty });
+    count.store_data.push({ code: extractNumericCode(code), quantity: qty, timestamp: new Date().toISOString() }); // Adicionado timestamp
     count.status = 'created';
     await saveCounts(counts);
 
-    res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}` });
+    // Buscar o nome do produto
+    const systemItem = count.system_data.find(item => item.code === extractNumericCode(code));
+    const productName = systemItem ? systemItem.product : 'Produto desconhecido';
+
+    res.status(200).json({ message: `Código ${code} adicionado com quantidade ${qty}`, productName });
   } catch (error) {
     console.error('Erro ao adicionar código:', error);
     res.status(500).json({ error: 'Erro ao adicionar código: ' + error.message });
+  }
+});
+
+app.post('/remove-store-item', async (req, res) => {
+  try {
+    const { countId, index } = req.body;
+    if (!countId) return res.status(400).json({ error: 'ID da contagem não fornecido' });
+    if (index === undefined || index < 0) return res.status(400).json({ error: 'Índice inválido' });
+
+    const count = counts.find(c => c.id === parseInt(countId));
+    if (!count) return res.status(400).json({ error: 'Contagem não encontrada' });
+
+    if (!Array.isArray(count.store_data) || count.store_data.length <= index) {
+      return res.status(400).json({ error: 'Item não encontrado' });
+    }
+
+    const removedItem = count.store_data.splice(index, 1)[0];
+    await saveCounts(counts);
+
+    res.status(200).json({ message: `Item ${removedItem.code} removido com sucesso` });
+  } catch (error) {
+    console.error('Erro ao remover item:', error);
+    res.status(500).json({ error: 'Erro ao remover item: ' + error.message });
   }
 });
 
@@ -473,6 +501,7 @@ app.get('/report-detailed', async (req, res) => {
           <main class="App-main">
             <div class="card">
               <h2>RELATÓRIO DETALHADO</h2>
+              <p><strong>Empresa:</strong> ${count.company || 'Sem Empresa'}</p>
               <p><strong>Título:</strong> ${report.title}</p>
               <p><strong>Data:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
               <h3>Resumo</h3>
@@ -572,6 +601,7 @@ app.get('/report-synthetic', async (req, res) => {
           <main class="App-main">
             <div class="card">
               <h2>RELATÓRIO SINTÉTICO</h2>
+              <p><strong>Empresa:</strong> ${count.company || 'Sem Empresa'}</p>
               <p><strong>Título:</strong> ${report.title}</p>
               <p><strong>Data:</strong> ${new Date(report.timestamp).toLocaleString()}</p>
               <h3>Resumo</h3>
@@ -630,11 +660,24 @@ app.get('/report-synthetic', async (req, res) => {
 
 app.get('/past-counts', async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, company, startDate, endDate } = req.query;
     let filteredCounts = counts;
+
     if (status) {
-      filteredCounts = counts.filter(count => count.status === status);
+      filteredCounts = filteredCounts.filter(count => count.status === status);
     }
+    if (company) {
+      filteredCounts = filteredCounts.filter(count => count.company && count.company.toLowerCase().includes(company.toLowerCase()));
+    }
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      filteredCounts = filteredCounts.filter(count => {
+        const countDate = new Date(count.timestamp);
+        return countDate >= start && countDate <= end;
+      });
+    }
+
     console.log('Dados enviados para o frontend:', filteredCounts);
     res.status(200).json(filteredCounts);
   } catch (error) {
