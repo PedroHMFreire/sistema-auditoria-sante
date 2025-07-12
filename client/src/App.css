@@ -109,6 +109,7 @@ nav {
   gap: 15px;
   flex-wrap: wrap;
   margin-bottom: 15px;
+  align-items: center;
 }
 
 .file-input,
@@ -150,6 +151,18 @@ nav {
   transform: translateY(-2px);
 }
 
+.btn.remove {
+  background-color: #FF4444;
+  color: #FFFFFF;
+  padding: 5px 10px;
+  font-size: 0.9em;
+}
+
+.btn.remove:hover {
+  background-color: #CC0000;
+  transform: translateY(-2px);
+}
+
 .btn-back {
   background: none;
   border: none;
@@ -169,6 +182,14 @@ nav {
   font-size: 0.9em;
   color: #FFFFFF;
   margin-top: 10px;
+}
+
+.transient-message {
+  font-size: 0.9em;
+  color: #34A853;
+  margin-top: 10px;
+  opacity: 1;
+  transition: opacity 1s ease-out;
 }
 
 .count-actions {
@@ -240,6 +261,13 @@ nav {
   gap: 15px;
 }
 
+.filter-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #2C2C2C;
+  border-radius: 8px;
+}
+
 @media print {
   .App-header, .no-print, .count-actions {
     display: none !important;
@@ -296,5 +324,8 @@ nav {
   }
   .count-actions .btn {
     width: 100%;
+  }
+  .filter-section .field {
+    flex-direction: column;
   }
 }
