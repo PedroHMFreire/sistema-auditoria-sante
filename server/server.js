@@ -13,16 +13,17 @@ const { Sequelize, DataTypes } = require('sequelize');
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Configuração do banco de dados
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
   logging: process.env.NODE_ENV !== 'production',
 });
+
 const User = sequelize.define('User', {
   email: { type: DataTypes.STRING, unique: true },
   password: DataTypes.STRING,
   company: DataTypes.STRING,
   approved: { type: DataTypes.BOOLEAN, defaultValue: false },
 }, { timestamps: true });
+
 const Count = sequelize.define('Count', {
   title: DataTypes.STRING,
   company: DataTypes.STRING,
@@ -123,16 +124,7 @@ app.post('/approve-user/:id', async (req, res) => {
 });
 
 app.post('/create-count-from-excel', authenticateToken, upload.single('file'), async (req, res) => {
-  // TOPO DA ROTA – insira aqui:
-  console.log('🔁 ROTA ACIONADA: /create-count-from-excel');
-  console.log('🔐 Token recebido:', req.headers.authorization);
-  console.log('📂 Arquivo recebido:', req.file);
-  console.log('🧾 Dados recebidos no body:', req.body);
-
   try {
-    console.log('Usuário autenticado:', req.user);
-    console.log('Arquivo recebido:', req.file);
-
     if (!req.user?.id) {
       return res.status(403).json({ error: 'Usuário não autenticado corretamente' });
     }
@@ -183,20 +175,34 @@ app.post('/create-count-from-excel', authenticateToken, upload.single('file'), a
       userId: req.user.id,
     };
 
-const createdCount = await Count.create(newCount);
-await fs.unlink(req.file.path);
+    const createdCount = await Count.create(newCount);
+    await fs.unlink(req.file.path);
 
-res.status(201).json({
-  message: 'Contagem criada com sucesso',
-  count: createdCount,
-  itemCount: systemData.length
-});
-} catch (error) {
-  console.error('Erro ao criar contagem:', error.stack);
-  if (req.file?.path) {
-    await fs.unlink(req.file.path).catch(err => console.error('Erro ao deletar arquivo:', err));
+    res.status(201).json({
+      message: 'Contagem criada com sucesso',
+      count: createdCount,
+      itemCount: systemData.length
+    });
+  } catch (error) {
+    console.error('Erro ao criar contagem:', error.stack);
+    if (req.file?.path) await fs.unlink(req.file.path).catch(err => console.error('Erro ao deletar arquivo:', err));
+    res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
   }
-  res.status(500).json({ error: 'Erro ao criar contagem: ' + error.message });
+});
+
+app.get('/counts/active', authenticateToken, async (req, res) => {
+  try {
+    const counts = await Count.findAll({
+      where: {
+        userId: req.user.id,
+        status: 'created'
+      },
+      order: [['createdAt', 'DESC']]
+    });
+    res.json(counts);
+  } catch (error) {
+    console.error('Erro ao buscar contagens:', error.message);
+    res.status(500).json({ error: 'Erro ao buscar contagens' });
   }
 });
 
