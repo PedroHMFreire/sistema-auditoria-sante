@@ -1,11 +1,11 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import Login from '../pages/Login';
-import Register from '../pages/Register';
-import Admin from '../pages/Admin';
-import ActiveCount from '../pages/ActiveCount';
-import CountDetail from '../pages/CountDetail';
-import CreatedCounts from '../pages/CreatedCounts';
+import Login from '../Login';
+import Register from '../Register';
+import Admin from '../Admin';
+import ActiveCount from '../ActiveCount';
+import CountDetail from '../CountDetail';
+import CreatedCounts from '../CreatedCounts';
 import { useAuth } from '../context/AuthContext';
 
 const AppRoutes = () => {
