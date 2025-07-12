@@ -1,61 +1,154 @@
-.card {
-  max-width: 600px;
-  margin: 2rem auto;
-  padding: 2rem;
-  background-color: #ffffff;
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+@font-face {
+  font-family: 'Norwester';
+  src: url('https://github.com/jamiewilson/norwester/raw/master/dist/fonts/norwester.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: #1C2526;
+  color: #FFFFFF;
+}
+
+.App {
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 20px;
   border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  background-color: #1C2526;
+}
+
+.App-header {
+  text-align: center;
+  padding: 20px;
+  border-bottom: 1px solid #444;
+  background-color: #1C2526;
+}
+
+.app-title {
+  font-family: 'Norwester', sans-serif;
+  font-size: 2.5em;
+  font-weight: bold;
+  color: #FF6200;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+nav {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.nav-link, .category-link {
+  text-decoration: none;
+  color: #FFFFFF;
+  font-size: 1em;
+  padding: 8px 16px;
+  border-radius: 6px;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.nav-link:hover, .category-link:hover {
+  background-color: #FF6200;
+  color: #000000;
+}
+
+.count-link {
+  text-decoration: none;
+  color: #FF6200;
+  transition: color 0.3s;
+}
+
+.count-link:hover {
+  color: #E65C00;
+}
+
+.App-main {
+  padding: 30px 0;
+}
+
+.card {
+  background: #1C2526;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.card h2 {
+  font-size: 1.8em;
+  color: #FFFFFF;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+.card h3 {
+  font-size: 1.5em;
+  color: #FFFFFF;
+  margin-bottom: 10px;
+}
+
+.card p {
+  font-size: 1em;
+  color: #FFFFFF;
+  margin-bottom: 15px;
 }
 
 .field {
-  margin-bottom: 1.5rem;
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 15px;
+  align-items: center;
 }
 
-.text-input,
-.file-input {
+.file-input,
+.text-input {
+  padding: 12px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  font-size: 1em;
   width: 100%;
-  padding: 0.75rem;
-  font-size: 1rem;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+  max-width: 200px;
+  background-color: #333333;
+  color: #FFFFFF;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.file-input:focus,
+.text-input:focus {
+  border-color: #FF6200;
+  box-shadow: 0 0 5px rgba(255, 98, 0, 0.3);
+  outline: none;
+}
+
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.1s;
 }
 
 .btn.primary {
   background-color: #FF6200;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
+  color: #000000;
 }
 
-.autocomplete {
-  position: relative;
+.btn.primary:hover {
+  background-color: #E65C00;
+  transform: translateY(-2px);
 }
 
-.suggestions-list {
-  position: absolute;
-  z-index: 10;
-  background: white;
-  width: 100%;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  list-style: none;
-  padding: 0;
-  margin-top: 2px;
-}
-
-.suggestion-item {
-  padding: 0.5rem;
-  cursor: pointer;
-}
-
-.suggestion-item:hover {
-  background-color: #f0f0f0;
-}
-
-.count-info {
-  margin-top: 1rem;
-  text-align: center;
-  font-weight: bold;
-}
+.btn.secondary {
