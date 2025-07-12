@@ -1,16 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 
 const ActiveCount = () => {
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState('');
-  const [company, setCompany] = useState(''); // Novo campo para empresa
+  const [company, setCompany] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [companies, setCompanies] = useState([]);
+  const [filteredCompanies, setFilteredCompanies] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const response = await axios.get('/companies');
+        setCompanies(response.data);
+      } catch (err) {
+        console.error('Erro ao carregar empresas:', err);
+      }
+    };
+    fetchCompanies();
+  }, []);
+
+  useEffect(() => {
+    if (company) {
+      const filtered = companies.filter(c =>
+        c.toLowerCase().includes(company.toLowerCase())
+      );
+      setFilteredCompanies(filtered);
+      setShowSuggestions(true);
+    } else {
+      setFilteredCompanies([]);
+      setShowSuggestions(false);
+    }
+  }, [company, companies]);
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
+  };
+
+  const handleCompanySelect = (selectedCompany) => {
+    setCompany(selectedCompany);
+    setShowSuggestions(false);
   };
 
   const handleSubmit = async (e) => {
@@ -23,7 +56,7 @@ const ActiveCount = () => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('title', title);
-    formData.append('company', company); // Adicionando empresa ao formData
+    formData.append('company', company);
 
     try {
       const response = await axios.post('/create-count-from-excel', formData, {
@@ -33,7 +66,7 @@ const ActiveCount = () => {
       setError('');
       setFile(null);
       setTitle('');
-      setCompany(''); // Limpar o campo empresa
+      setCompany('');
       document.getElementById('file-input').value = '';
     } catch (err) {
       setError('Erro ao criar contagem: ' + (err.response?.data?.error || err.message));
@@ -47,13 +80,30 @@ const ActiveCount = () => {
       <form onSubmit={handleSubmit}>
         <div className="field">
           <label>Empresa:</label>
-          <input
-            type="text"
-            value={company}
-            onChange={(e) => setCompany(e.target.value)}
-            placeholder="Digite o nome da empresa"
-            className="text-input"
-          />
+          <div className="autocomplete">
+            <input
+              type="text"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="Digite o nome da empresa"
+              className="text-input"
+              onFocus={() => company && setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            />
+            {showSuggestions && filteredCompanies.length > 0 && (
+              <ul className="suggestions-list">
+                {filteredCompanies.map((comp, index) => (
+                  <li
+                    key={index}
+                    onClick={() => handleCompanySelect(comp)}
+                    className="suggestion-item"
+                  >
+                    {comp}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
         <div className="field">
           <label>Título da Contagem:</label>
