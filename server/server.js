@@ -164,6 +164,14 @@ app.put("/count/:id/finalize", async (req, res) => {
   res.json({ message: "Contagem finalizada!" });
 });
 
+// Servir o React buildado
+const clientPath = path.join(__dirname, "../client/build");
+app.use(express.static(clientPath));
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(clientPath, "index.html"));
+});
+
 app.listen(port, () => {
   console.log(`Servidor rodando na porta ${port}`);
 });
